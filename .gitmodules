@@ -1,0 +1,3 @@
+[submodule "modules/MM"]
+	path = modules/MM
+	url = git@github.com:kirbysayshi/MM.js.git
