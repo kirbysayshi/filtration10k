@@ -22,10 +22,10 @@ function Stage(id){
 			
 			var rgba = "rgba(" + Math.floor(n.dnes * 255) + ",0,0,1)";
 			
-			ctx.shadowOffsetX = 0;
-			ctx.shadowOffsetY = 0;
-			ctx.shadowBlur = 10;
-			ctx.shadowColor = "rgba(0," + Math.floor(n.dnes * 255) + ",0,1)";
+			//ctx.shadowOffsetX = 0;
+			//ctx.shadowOffsetY = 0;
+			//ctx.shadowBlur = 10;
+			//ctx.shadowColor = "rgba(0," + Math.floor(n.dnes * 255) + ",0,1)";
 			
 			ctx.fillStyle = rgba;
 			ctx.beginPath();
@@ -34,6 +34,7 @@ function Stage(id){
 		}
 		ctx.fillStyle = "#FFFFFF";
 		ctx.fillText( MM(60)[0], 100, 20 );
+		//console.log(MM(60)[0]);
 	}
 	
 	function resolveNodeCollisions(){
@@ -43,51 +44,27 @@ function Stage(id){
 			for(var j = 0; j < nlist.length; j++){
 				var n2 = nlist[j];
 				if(n1 == n2) continue;
-				var depthVec =  vec3.sub(n1.cpos, n2.cpos); //n1.getCollisionDepth(n2)
+				var colVec =  vec3.sub(n1.cpos, n2.cpos); //n1.getCollisionDepth(n2)
 				var combinedRadius = n1.rad + n2.rad;
-				var dotDepth = vec3.dot(depthVec, depthVec);
+				var dotCol = vec3.dot(colVec, colVec); // effectively the distance squared
 				var radius2 = combinedRadius*combinedRadius;
 				
-				if(dotDepth > radius2){
+				if(dotCol > radius2){
 					continue;
-					//return false; // particles are not colliding
 				}
 			
-				var collDepth = Math.sqrt(dotDepth);
-				depthVec = vec3.scale( depthVec, 1/collDepth );
-				var depth = combinedRadius - collDepth;
-				
-				console.log("colliding", n1, n2, depth);
-				
-				var friction = 1;//0.5;
-				var invMass = n1.invMass + n2.invMass;
-				n2.cpos = vec3.sub(n2.cpos, 
-					vec3.scale(depthVec, depth*n2.invMass));
-				n1.cpos = vec3.add(n1.cpos, 
-					vec3.scale(depthVec, depth*n1.invMass));
-				
-				var V0 = vec3.sub(n1.cpos, n1.ppos);
-				var V1 = vec3.sub(n2.cpos, n2.ppos);
-				var V = vec3.sub(V0, V1);
-				
-				var Vn = vec3.scale(depthVec, vec3.dot(V, depthVec) );
-				var Vt = vec3.sub(V, Vn);
-				
-				//Vt = vec3.scale( Vt, 1/invMass );
-				Vt[0] /= invMass;
-				Vt[1] /= invMass;
-				Vt[2] /= invMass;
-				
-				n1.cpos = vec3.sub(n1.cpos, vec3.scale(Vt, friction*n1.invMass) );
-				n2.cpos = vec3.sub(n2.cpos, vec3.scale(Vt, friction*n2.invMass) );
+				var distance = Math.sqrt(dotCol);
+				var distDiff = combinedRadius - distance;
+				var distForEachCircle = distDiff / 2; // this can't be right
+				var response = vec3.a(
+					colVec[0]/distance*distForEachCircle,
+					colVec[1]/distance*distForEachCircle,
+					colVec[2] );
+					
+				n1.cpos = vec3.add(n1.cpos, response);
+				n2.cpos = vec3.sub(n2.cpos, response);
 				
 				return true;
-					// v = [n1x - n2x, n1y - n2y] // puts it at origin
-					// normalize v
-					// b is unit x-axis
-					// theta = acos( v dot b ) if a and b are unit
-					// move n1 and n2 away from each other: cos(theta) * colDepth/2, sin(theta) * colDepth/2
-				
 			}
 		
 		}
@@ -231,7 +208,7 @@ var vec3 = {
 		vec3.ignited = true;
 	}
 	,a: function(x, y, z){
-		if(vec3.ig == false) vec3.setType();
+		if(vec3.ignited == false) vec3.setType();
 		var v = new vec3.setType(3);
 		v[0] = x;
 		v[1] = y;
