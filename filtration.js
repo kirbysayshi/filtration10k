@@ -52,15 +52,19 @@ function Stage(id){
 					continue;
 					//return false; // particles are not colliding
 				}
-				
+			
 				var collDepth = Math.sqrt(dotDepth);
 				depthVec = vec3.scale( depthVec, 1/collDepth );
 				var depth = combinedRadius - collDepth;
 				
-				var friction = 0.5;
+				console.log("colliding", n1, n2, depth);
+				
+				var friction = 1;//0.5;
 				var invMass = n1.invMass + n2.invMass;
-				n2.cpos = vec3.sub(n2.cpos, vec3.scale(depthVec, depth*n2.invMass));
-				n1.cpos = vec3.add(n1.cpos, vec3.scale(depthVec, depth*n1.invMass));
+				n2.cpos = vec3.sub(n2.cpos, 
+					vec3.scale(depthVec, depth*n2.invMass));
+				n1.cpos = vec3.add(n1.cpos, 
+					vec3.scale(depthVec, depth*n1.invMass));
 				
 				var V0 = vec3.sub(n1.cpos, n1.ppos);
 				var V1 = vec3.sub(n2.cpos, n2.ppos);
@@ -69,7 +73,10 @@ function Stage(id){
 				var Vn = vec3.scale(depthVec, vec3.dot(V, depthVec) );
 				var Vt = vec3.sub(V, Vn);
 				
-				Vt = vec3.scale( Vt, 1/invMass );
+				//Vt = vec3.scale( Vt, 1/invMass );
+				Vt[0] /= invMass;
+				Vt[1] /= invMass;
+				Vt[2] /= invMass;
 				
 				n1.cpos = vec3.sub(n1.cpos, vec3.scale(Vt, friction*n1.invMass) );
 				n2.cpos = vec3.sub(n2.cpos, vec3.scale(Vt, friction*n2.invMass) );
@@ -97,7 +104,7 @@ function Stage(id){
 			var n1 = nlist[i];
 		
 			// add gravity temporarily
-			n1.acl = vec3.add(n1.acl, new vec3.a(0, 100, 0));
+			//n1.acl = vec3.add(n1.acl, vec3.a(0, 100, 0));
 		
 			var temp = vec3.clone(n1.cpos);
 			n1.cpos = vec3.add(
@@ -107,7 +114,7 @@ function Stage(id){
 				), n1.cpos);
 			
 			n1.ppos = temp;
-			n1.acl = new vec3.a(0,0,0);
+			n1.acl = vec3.a(0,0,0);
 			//checkBounds(n1);
 		}
 		
@@ -129,21 +136,51 @@ function Stage(id){
 		ry = ry > dim[1] - n.rad ? ry -= n.rad : ry;
 		ry = ry < n.rad ? ry += n.rad : ry;
 		
-		n.cpos = new vec3.a(rx, ry, 0);
-		n.ppos = new vec3.a(rx, ry, 0);
-		n.acl = new vec3.a(0, 0, 0);
+		n.cpos = vec3.a(rx, ry, 0);
+		n.ppos = vec3.a(rx, ry, 0);
+		n.acl = vec3.a(0, 0, 0);
 		nlist.push(n);
 	}
 	
-	//var n1 = new Node();
-	//n1.cpos = new vec3.a(10, 10, 0);
-	//n1.ppos = new vec3.a(10, 10, 0);
-	//nlist.push(n1);
-	//
-	//var n2 = new Node();
-	//n2.cpos = new vec3.a(20, 10, 0);
-	//n2.ppos = new vec3.a(20, 10, 0);
-	//nlist.push(n2);
+	var n1 = new Node();
+	n1.cpos = vec3.a(400, 100, 0);
+	n1.ppos = vec3.a(400, 100, 0);
+	nlist.push(n1);
+	
+	var n2 = new Node();
+	n2.cpos = vec3.a(100, 100, 0);
+	n2.ppos = vec3.a(100, 100, 0);
+	nlist.push(n2);
+	
+	var grabbed = false;
+	
+	cvs.addEventListener("mousedown", function(e){
+		var d = 999999999;
+		var mouse = vec3.a( e.clientX, e.clientY, 0 );
+		console.log(e, mouse);
+		for(var i = 0; i < nlist.length; i++){
+			var delta = vec3.length(vec3.sub(mouse, nlist[i].cpos));
+			if(delta < d) {
+				grabbed = nlist[i];
+				d = delta;
+			}
+		}
+	}, false);
+	
+	cvs.addEventListener("mouseup", function(e){
+		grabbed = false;
+	}, false);
+	
+	cvs.addEventListener("mousemove", function(e){
+		if(grabbed != false){
+			grabbed.cpos[0] = e.clientX;
+			grabbed.cpos[1] = e.clientY;
+			
+			// kill movement
+			grabbed.ppos[0] = e.clientX;
+			grabbed.ppos[1] = e.clientY;
+		}
+	}, false);
 	
 	return { 
 		draw: draw
@@ -160,9 +197,9 @@ function Node(){
 	this.rad = 30 * r; // radius/bandwidth/gravity
 	this.rad2 = this.rad*this.rad;
 	this.res = this.ist ? 99 : 100 * r; // resistance to becoming clean
-	this.ppos = new vec3.a(0,0,0); // previous position
-	this.cpos = new vec3.a(0,0,0); // current position
-	this.acl = new vec3.a(0,0,0); // acceleration
+	this.ppos = vec3.a(0,0,0); // previous position
+	this.cpos = vec3.a(0,0,0); // current position
+	this.acl = vec3.a(0,0,0); // acceleration
 	this.invMass = 1/this.rad;
 	this.cto = []; // connected to
 	this.dnes = 1; // how dirty the node is (between 0 and 1)
@@ -187,29 +224,38 @@ function Packet(node, dnes){
 }
 
 var vec3 = {
-	a: function(x, y, z){
-		if(typeof Float32Array !== 'undefined') vec3.a = Float32Array;
-		else vec3.a = Array;
-		return vec3.a(x, y, z);
+	ignited: false
+	,setType: function(){
+		if(typeof Float32Array !== 'undefined') vec3.setType = Float32Array;
+		else vec3.setType = Array;
+		vec3.ignited = true;
+	}
+	,a: function(x, y, z){
+		if(vec3.ig == false) vec3.setType();
+		var v = new vec3.setType(3);
+		v[0] = x;
+		v[1] = y;
+		v[2] = z;
+		return v;//vec3.a(x, y, z);
 	}
 	,add: function(v1, v2){
-		return new vec3.a( v1[0]+v2[0], v1[1]+v2[1], v1[2]+v2[2] );
+		return vec3.a( v1[0]+v2[0], v1[1]+v2[1], v1[2]+v2[2] );
 	}
 	,sub: function(v1, v2){
-		return new vec3.a( v1[0]-v2[0], v1[1]-v2[1], v1[2]-v2[2] );
+		return vec3.a( v1[0]-v2[0], v1[1]-v2[1], v1[2]-v2[2] );
 	}
 	,normalize: function(v1){
 		var x = v1[0], y = v1[1], z = v1[2];
 		var len = Math.sqrt(x*x + y*y + z*z);
 
 		if (!len) {
-			return new vec3.a(0,0,0);
+			return vec3.a(0,0,0);
 		} else if (len == 1) {
-			return new vec3.a(x,y,z);
+			return vec3.a(x,y,z);
 		}
 
 		len = 1 / len;
-		return new vec3.a(x*len, y*len, z*len);
+		return vec3.a(x*len, y*len, z*len);
 	}
 	,length: function(v1){
 		var x = v1[0], y = v1[1], z = v1[2];
@@ -219,17 +265,17 @@ var vec3 = {
 		return v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2];
 	}
 	,scale: function(v1, s){
-		return new vec3.a(v1[0]*s, v1[1]*s, v1[2]*s);
+		return vec3.a(v1[0]*s, v1[1]*s, v1[2]*s);
 	}
 	,clone: function(v1){
-		return new vec3.a(v1[0], v1[1], v1[2]);
+		return vec3.a(v1[0], v1[1], v1[2]);
 	}
 }
 
 var S = new Stage("stage");
 var run = setInterval(function(){
 	S.goVerlet(0.03);
-	//S.resolveNodeCollisions();
+	S.resolveNodeCollisions();
 	S.draw();
 	
 }, 16);
