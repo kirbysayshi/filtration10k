@@ -6,7 +6,7 @@ function Stage(id){
 		,dim = [ cvs.width, cvs.height, 0 ] // dimensions: width, height of canvas
 		,ctx = cvs.getContext('2d')
 		,r = Math.random()
-		,max = 100 * r // max num of nodes per game
+		,max = 15 * r // max num of nodes per game
 		,rwm = 0 // max radius per row, for init
 		
 		,nlist = []; // node list
@@ -20,14 +20,15 @@ function Stage(id){
 		for(var i = 0; i < nlist.length; i++){
 			n = nlist[i];
 			
-			var rgba = "rgba(" + Math.floor(n.dnes * 255) + ",0,0,1)";
+			var frgba = "rgba(" + Math.floor(n.dnes * 255) + ",0,0," + (1 - (n.cpos[2] / 200)) + ")";
 			
 			//ctx.shadowOffsetX = 0;
 			//ctx.shadowOffsetY = 0;
 			//ctx.shadowBlur = 10;
 			//ctx.shadowColor = "rgba(0," + Math.floor(n.dnes * 255) + ",0,1)";
 			
-			ctx.fillStyle = rgba;
+			ctx.fillStyle = frgba;
+			ctx.strokeStyle = 
 			ctx.beginPath();
 			ctx.arc(n.cpos[0], n.cpos[1], n.rad, 0, Math.PI*2, false);
 			ctx.fill();
@@ -38,6 +39,7 @@ function Stage(id){
 	}
 	
 	function resolveNodeCollisions(){
+		var friction = 0.5;
 		for(var i = 0; i < nlist.length; i++){
 			var n1 = nlist[i];
 		
@@ -53,16 +55,39 @@ function Stage(id){
 					continue;
 				}
 			
+				console.log("collision");
+				if(n1 == grabbed || n2 == grabbed){
+					console.log(grabbed);
+				}
+				
+				var invMass = n1.invMass + n2.invMass;
 				var distance = Math.sqrt(dotCol);
-				var distDiff = combinedRadius - distance;
-				var distForEachCircle = distDiff / 2; // this can't be right
-				var response = vec3.a(
-					colVec[0]/distance*distForEachCircle,
-					colVec[1]/distance*distForEachCircle,
-					colVec[2] );
-					
-				n1.cpos = vec3.add(n1.cpos, response);
-				n2.cpos = vec3.sub(n2.cpos, response);
+				
+				//colVec = vec3.normalize(colVec);
+				// manually normalize, since we already have the distance
+				colVec[0] /= distance;
+				colVec[1] /= distance;
+				colVec[2] /= distance;
+				
+				n2.cpos = vec3.sub(n2.cpos, 
+					vec3.scale(colVec, distance * n2.invMass));
+				n1.cpos = vec3.add(n1.cpos,
+					vec3.scale(colVec, distance * n1.invMass));
+				
+				var V0 = vec3.sub(n1.cpos, n1.ppos);
+				var V1 = vec3.sub(n2.cpos, n2.ppos);
+				var V  = vec3.sub(V0, V1);
+							
+				var Vn = vec3.scale(colVec, vec3.dot(V, colVec));
+				var Vt = vec3.sub(V, Vn);
+				
+				// normalize by mass?
+				Vt[0] /= invMass;
+				Vt[1] /= invMass;
+				Vt[2] /= invMass;
+				
+				n1.cpos = vec3.sub(n1.cpos, vec3.scale(Vt, friction*n1.invMass) );
+				n2.cpos = vec3.add(n2.cpos, vec3.scale(Vt, friction*n2.invMass) );
 				
 				return true;
 			}
@@ -92,7 +117,7 @@ function Stage(id){
 			
 			n1.ppos = temp;
 			n1.acl = vec3.a(0,0,0);
-			//checkBounds(n1);
+			checkBounds(n1);
 		}
 		
 	}
@@ -171,7 +196,7 @@ function Stage(id){
 function Node(){
 	var r = Math.random();
 	this.ist = r > 0.9 ? true : false; // is source of infection
-	this.rad = 30 * r; // radius/bandwidth/gravity
+	this.rad = 100 * r; // radius/bandwidth/gravity
 	this.rad2 = this.rad*this.rad;
 	this.res = this.ist ? 99 : 100 * r; // resistance to becoming clean
 	this.ppos = vec3.a(0,0,0); // previous position
@@ -251,7 +276,7 @@ var vec3 = {
 
 var S = new Stage("stage");
 var run = setInterval(function(){
-	S.goVerlet(0.03);
+	S.goVerlet(0.0003);
 	S.resolveNodeCollisions();
 	S.draw();
 	
