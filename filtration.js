@@ -3,13 +3,14 @@
 function Stage(id){
 	var 
 		 cvs = document.getElementById(id)
-		,dim = [ cvs.width, cvs.height, 0 ] // dimensions: width, height of canvas
+		,dim = [ cvs.width, cvs.height, 1000 ] // dimensions: width, height of canvas
 		,ctx = cvs.getContext('2d')
 		,r = Math.random()
-		,max = 15 * r // max num of nodes per game
+		,max = 25 * r // max num of nodes per game
 		,rwm = 0 // max radius per row, for init
 		
-		,nlist = []; // node list
+		,nlist = [] // node list
+		,tlist = []; // tracker list
 	
 	function draw(){
 		
@@ -20,7 +21,9 @@ function Stage(id){
 		for(var i = 0; i < nlist.length; i++){
 			n = nlist[i];
 			
-			var frgba = "rgba(" + Math.floor(n.dnes * 255) + ",0,0," + (1 - (n.cpos[2] / 200)) + ")";
+			var frgba = "rgba(" + Math.floor(n.dnes * 255) 
+				+ "," + (n.ist ? 255 : 0) 
+				+ ",0,1)";
 			
 			//ctx.shadowOffsetX = 0;
 			//ctx.shadowOffsetY = 0;
@@ -28,14 +31,53 @@ function Stage(id){
 			//ctx.shadowColor = "rgba(0," + Math.floor(n.dnes * 255) + ",0,1)";
 			
 			ctx.fillStyle = frgba;
-			ctx.strokeStyle = 
+			ctx.strokeStyle = "#CCCCCC";
 			ctx.beginPath();
-			ctx.arc(n.cpos[0], n.cpos[1], n.rad, 0, Math.PI*2, false);
+			ctx.arc(n.cpos[0], n.cpos[1], n.rad * (1 - (n.cpos[2] / dim[2])), 0, Math.PI*2, false);
 			ctx.fill();
+			
+			if(n.cto.length > 0){
+				ctx.beginPath();
+				for(var j = 0; j < n.cto.length; j++){		
+					ctx.moveTo(n.cpos[0], n.cpos[1]);
+					//ctx.lineTo(n.cto[j].cpos[0], n.cto[j].cpos[1]);
+					ctx.quadraticCurveTo(
+						 ((n.cpos[0] + n.cto[j].cpos[0]) / 2) + 30
+						,((n.cpos[1] + n.cto[j].cpos[1]) / 2) + 30
+						,n.cto[j].cpos[0]
+						,n.cto[j].cpos[1]
+						);
+				}
+				ctx.stroke();
+			}
 		}
+		
 		ctx.fillStyle = "#FFFFFF";
 		ctx.fillText( MM(60)[0], 100, 20 );
 		//console.log(MM(60)[0]);
+	}
+	
+	function resolveConstraints(){
+		for(var i = 0; i < nlist.length; i++){
+			var t = nlist[i];
+			
+			for(var j = 0; j < t.cto.length; j++){
+				var n = t.cto[j];
+				var restLength = t.ist ? (n.res + (n.rad + t.rad)) : (n.res + (n.rad + t.rad)) * 2;
+				var restLength2 = restLength*restLength;
+				var invMass = n.invMass + t.invMass;
+				if( invMass < 0.00001 ) continue;
+				
+				var delta  = vec3.sub(n.cpos, t.cpos);
+				var delta2 = vec3.dot(delta, delta);
+				var diff = restLength2/(delta2 + restLength2)-0.5;
+				diff *= -2;
+				
+				delta = vec3.scale(delta, diff/invMass);
+				t.cpos = vec3.add(t.cpos, vec3.scale(delta, t.invMass));
+				n.cpos = vec3.sub(n.cpos, vec3.scale(delta, n.invMass));
+			}
+		}
 	}
 	
 	function resolveNodeCollisions(){
@@ -98,7 +140,8 @@ function Stage(id){
 	function checkBounds(node){
 		node.cpos[0] = Math.max( 0 + node.rad, Math.min(node.cpos[0], dim[0] - node.rad) );
 		node.cpos[1] = Math.max( 0 + node.rad, Math.min(node.cpos[1], dim[1] - node.rad) );
-		node.cpos[2] = Math.max( 0 + node.rad, Math.min(node.cpos[1], dim[2] - node.rad) );
+		node.cpos[2] = Math.max( 0 + node.rad, Math.min(node.cpos[2], dim[2] - node.rad) );
+		//node.cpos[2] = 0; // uncomment this to disable 3D
 	}
 	
 	function goVerlet(dt){
@@ -119,7 +162,8 @@ function Stage(id){
 			n1.acl = vec3.a(0,0,0);
 			checkBounds(n1);
 		}
-		
+		// z-sorting!
+		nlist.sort(function(a,b){return a.cpos[2] - b.cpos[2];});
 	}
 	
 	/////////////////////////////////////
@@ -144,15 +188,62 @@ function Stage(id){
 		nlist.push(n);
 	}
 	
-	var n1 = new Node();
-	n1.cpos = vec3.a(400, 100, 0);
-	n1.ppos = vec3.a(400, 100, 0);
-	nlist.push(n1);
+	for(var i = 0; i < nlist.length; i++){
+		var n = nlist[i];
+		// if it's a tracker, connect previous and next 3 nodes to it
+		if(n.ist){
+			tlist.push(n);
+			if(i-1 > 0){
+				n.cto.push(nlist[i-1]);
+			}
+			if(i-2 > 0){
+				n.cto.push(nlist[i-2]);
+			}
+			if(i-3 > 0){
+				n.cto.push(nlist[i-3]);
+			}
+			
+			if(i+1 < nlist.length - i){
+				n.cto.push(nlist[i+1]);
+			}
+			if(i+2 < nlist.length - i){
+				n.cto.push(nlist[i+2]);
+			}
+			if(i+3 < nlist.length - i){
+				n.cto.push(nlist[i+3]);
+			}
+		}
+		
+		
+		nlist.sort(function(a,b){
+			var da = vec3.length(vec3.sub(a.cpos, n.cpos));
+			var db = vec3.length(vec3.sub(b.cpos, n.cpos));
+			if(da > db) return 1;
+			if(da < db) return -1;
+			if(da == db) return 0;
+		});
+		n.cto = nlist.slice(0, 3);
+		//for(var j = 0; j < nlist.length; j++){
+		//	var o = nlist[j];
+		//	if(neighbors.length == 0) neighbors.push(o);
+		//	var d = vec3.length(vec3.sub(o.cpos, n.cpos));
+		//	var c = vec3.length(vec3.sub(n.cpos, neighbors[0].cpos));
+		//	if(d < c) { // if it's smaller than the last, add it up front!
+		//		neighbors.unshift(o);
+		//	}
+		//}
+		
+	}
 	
-	var n2 = new Node();
-	n2.cpos = vec3.a(100, 100, 0);
-	n2.ppos = vec3.a(100, 100, 0);
-	nlist.push(n2);
+	//var n1 = new Node();
+	//n1.cpos = vec3.a(400, 100, 0);
+	//n1.ppos = vec3.a(400, 100, 0);
+	//nlist.push(n1);
+	//
+	//var n2 = new Node();
+	//n2.cpos = vec3.a(100, 100, 0);
+	//n2.ppos = vec3.a(100, 100, 0);
+	//nlist.push(n2);
 	
 	var grabbed = false;
 	
@@ -177,10 +268,12 @@ function Stage(id){
 		if(grabbed != false){
 			grabbed.cpos[0] = e.clientX;
 			grabbed.cpos[1] = e.clientY;
+			grabbed.cpos[2] = 0;
 			
 			// kill movement
 			grabbed.ppos[0] = e.clientX;
 			grabbed.ppos[1] = e.clientY;
+			grabbed.ppos[2] = 0;
 		}
 	}, false);
 	
@@ -189,6 +282,7 @@ function Stage(id){
 		, nlist: nlist
 		, goVerlet: goVerlet
 		, resolveNodeCollisions: resolveNodeCollisions 
+		, resolveConstraints: resolveConstraints
 	}
 }
 
@@ -196,7 +290,7 @@ function Stage(id){
 function Node(){
 	var r = Math.random();
 	this.ist = r > 0.9 ? true : false; // is source of infection
-	this.rad = 100 * r; // radius/bandwidth/gravity
+	this.rad = 50 * r; // radius/bandwidth/gravity
 	this.rad2 = this.rad*this.rad;
 	this.res = this.ist ? 99 : 100 * r; // resistance to becoming clean
 	this.ppos = vec3.a(0,0,0); // previous position
@@ -278,6 +372,7 @@ var S = new Stage("stage");
 var run = setInterval(function(){
 	S.goVerlet(0.0003);
 	S.resolveNodeCollisions();
+	S.resolveConstraints();
 	S.draw();
 	
 }, 16);
