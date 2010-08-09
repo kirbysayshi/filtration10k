@@ -58,12 +58,12 @@ function Stage(id){
 	}
 	
 	function resolveConstraints(){
-		for(var i = 0; i < nlist.length; i++){
-			var t = nlist[i];
+		for(var i = 0; i < tlist.length; i++){
+			var t = tlist[i];
 			
 			for(var j = 0; j < t.cto.length; j++){
 				var n = t.cto[j];
-				var restLength = t.ist ? (n.res + (n.rad + t.rad)) : (n.res + (n.rad + t.rad)) * 2;
+				var restLength = n.ist ? (n.res + (n.rad + t.rad)) * 2 : ((n.rad + t.rad)) * 1.5;
 				var restLength2 = restLength*restLength;
 				var invMass = n.invMass + t.invMass;
 				if( invMass < 0.00001 ) continue;
@@ -141,7 +141,13 @@ function Stage(id){
 		node.cpos[0] = Math.max( 0 + node.rad, Math.min(node.cpos[0], dim[0] - node.rad) );
 		node.cpos[1] = Math.max( 0 + node.rad, Math.min(node.cpos[1], dim[1] - node.rad) );
 		node.cpos[2] = Math.max( 0 + node.rad, Math.min(node.cpos[2], dim[2] - node.rad) );
-		//node.cpos[2] = 0; // uncomment this to disable 3D
+		
+		node.ppos[0] = Math.max( 0 + node.rad, Math.min(node.ppos[0], dim[0] - node.rad) );
+		node.ppos[1] = Math.max( 0 + node.rad, Math.min(node.ppos[1], dim[1] - node.rad) );
+		node.ppos[2] = Math.max( 0 + node.rad, Math.min(node.ppos[2], dim[2] - node.rad) );
+		
+		node.cpos[2] = 0; // uncomment this to disable 3D
+		node.ppos[2] = 0; // uncomment this to disable 3D
 	}
 	
 	function goVerlet(dt){
@@ -149,7 +155,7 @@ function Stage(id){
 			var n1 = nlist[i];
 		
 			// add gravity temporarily
-			//n1.acl = vec3.add(n1.acl, vec3.a(0, 100, 0));
+			n1.acl = vec3.add(n1.acl, vec3.a(0, 0, -100));
 		
 			var temp = vec3.clone(n1.cpos);
 			n1.cpos = vec3.add(
@@ -169,71 +175,112 @@ function Stage(id){
 	/////////////////////////////////////
 	// Init
 	/////////////////////////////////////
-	for(var i = 0; i < max; i++){
-		var  rx = Math.random()
-			,ry = Math.random()
-			,n = new Node();
-		rx *= dim[0]; // get random width
-		ry *= dim[1]; // get random height
-		
-		// make sure we're contained within the stage
-		rx = rx > dim[0] - n.rad ? rx -= n.rad : rx;
-		rx = rx < n.rad ? rx += n.rad : rx;
-		ry = ry > dim[1] - n.rad ? ry -= n.rad : ry;
-		ry = ry < n.rad ? ry += n.rad : ry;
-		
-		n.cpos = vec3.a(rx, ry, 0);
-		n.ppos = vec3.a(rx, ry, 0);
-		n.acl = vec3.a(0, 0, 0);
-		nlist.push(n);
+	//for(var i = 0; i < max; i++){
+	//	var  rx = Math.random()
+	//		,ry = Math.random()
+	//		,n = new Node();
+	//	rx *= dim[0]; // get random width
+	//	ry *= dim[1]; // get random height
+	//	
+	//	// make sure we're contained within the stage
+	//	rx = rx > dim[0] - n.rad ? rx -= n.rad : rx;
+	//	rx = rx < n.rad ? rx += n.rad : rx;
+	//	ry = ry > dim[1] - n.rad ? ry -= n.rad : ry;
+	//	ry = ry < n.rad ? ry += n.rad : ry;
+	//	
+	//	n.cpos = vec3.a(rx, ry, 0);
+	//	n.ppos = vec3.a(rx, ry, 0);
+	//	n.acl = vec3.a(0, 0, 0);
+	//	nlist.push(n);
+	//}
+	
+	// create a few trackers
+	var tMax = Math.floor(max / 4);
+	for(var i = 0; i < tMax; i++){
+		var t = new Node(true);
+		var div = vec3.a(
+			 Math.floor(dim[0] / (tMax + 1))
+			,Math.floor(dim[1] / (tMax + 1))
+			,0);
+		t.cpos = vec3.scale(div, i+1);
+		t.ppos = vec3.scale(div, i+1);
+		nlist.push(t);
+		tlist.push(t);
 	}
 	
-	for(var i = 0; i < nlist.length; i++){
-		var n = nlist[i];
-		// if it's a tracker, connect previous and next 3 nodes to it
-		if(n.ist){
-			tlist.push(n);
-			if(i-1 > 0){
-				n.cto.push(nlist[i-1]);
-			}
-			if(i-2 > 0){
-				n.cto.push(nlist[i-2]);
-			}
-			if(i-3 > 0){
-				n.cto.push(nlist[i-3]);
-			}
-			
-			if(i+1 < nlist.length - i){
-				n.cto.push(nlist[i+1]);
-			}
-			if(i+2 < nlist.length - i){
-				n.cto.push(nlist[i+2]);
-			}
-			if(i+3 < nlist.length - i){
-				n.cto.push(nlist[i+3]);
-			}
+	// create a few nodes around the trackers, connect them to the trackers
+	var per = Math.floor(max / tMax);
+	for (var i = 0; i < tlist.length; i++) {
+		var t = tlist[i];
+		var pInt = (Math.PI * 2) / per;
+		for(var j = 0; j < per; j++){
+			var n = new Node(false);
+			var dir = vec3.a(
+				 Math.cos(pInt*j)
+				,Math.sin(pInt*j)
+				,t.cpos[2]
+			);
+			n.cpos = vec3.add(t.cpos, vec3.scale(dir, (t.rad + n.rad) * 1.5));
+			n.ppos = vec3.clone(n.cpos);
+			nlist.push(n);
+			t.cto.push(n);
+			n.cto.push(t);
 		}
 		
-		
-		nlist.sort(function(a,b){
-			var da = vec3.length(vec3.sub(a.cpos, n.cpos));
-			var db = vec3.length(vec3.sub(b.cpos, n.cpos));
-			if(da > db) return 1;
-			if(da < db) return -1;
-			if(da == db) return 0;
-		});
-		n.cto = nlist.slice(0, 3);
-		//for(var j = 0; j < nlist.length; j++){
-		//	var o = nlist[j];
-		//	if(neighbors.length == 0) neighbors.push(o);
-		//	var d = vec3.length(vec3.sub(o.cpos, n.cpos));
-		//	var c = vec3.length(vec3.sub(n.cpos, neighbors[0].cpos));
-		//	if(d < c) { // if it's smaller than the last, add it up front!
-		//		neighbors.unshift(o);
-		//	}
-		//}
-		
+		// connect the trackers in series
+		if(i != 0){
+			t.cto.push( tlist[i-1] );
+		}
 	}
+	
+	
+	
+	//for(var i = 0; i < nlist.length; i++){
+	//	var n = nlist[i];
+	//	// if it's a tracker, connect previous and next 3 nodes to it
+	//	if(n.ist){
+	//		tlist.push(n);
+	//		if(i-1 > 0){
+	//			n.cto.push(nlist[i-1]);
+	//		}
+	//		if(i-2 > 0){
+	//			n.cto.push(nlist[i-2]);
+	//		}
+	//		if(i-3 > 0){
+	//			n.cto.push(nlist[i-3]);
+	//		}
+	//		
+	//		if(i+1 < nlist.length - i){
+	//			n.cto.push(nlist[i+1]);
+	//		}
+	//		if(i+2 < nlist.length - i){
+	//			n.cto.push(nlist[i+2]);
+	//		}
+	//		if(i+3 < nlist.length - i){
+	//			n.cto.push(nlist[i+3]);
+	//		}
+	//	}
+	//	
+	//	
+	//	nlist.sort(function(a,b){
+	//		var da = vec3.length(vec3.sub(a.cpos, n.cpos));
+	//		var db = vec3.length(vec3.sub(b.cpos, n.cpos));
+	//		if(da > db) return 1;
+	//		if(da < db) return -1;
+	//		if(da == db) return 0;
+	//	});
+	//	n.cto = nlist.slice(0, 3);
+	//	//for(var j = 0; j < nlist.length; j++){
+	//	//	var o = nlist[j];
+	//	//	if(neighbors.length == 0) neighbors.push(o);
+	//	//	var d = vec3.length(vec3.sub(o.cpos, n.cpos));
+	//	//	var c = vec3.length(vec3.sub(n.cpos, neighbors[0].cpos));
+	//	//	if(d < c) { // if it's smaller than the last, add it up front!
+	//	//		neighbors.unshift(o);
+	//	//	}
+	//	//}
+	//	
+	//}
 	
 	//var n1 = new Node();
 	//n1.cpos = vec3.a(400, 100, 0);
@@ -287,9 +334,9 @@ function Stage(id){
 }
 
 // r is a random between 0 and 1
-function Node(){
+function Node(ist){
 	var r = Math.random();
-	this.ist = r > 0.9 ? true : false; // is source of infection
+	this.ist = ist;//r > 0.9 ? true : false; // is source of infection
 	this.rad = 50 * r; // radius/bandwidth/gravity
 	this.rad2 = this.rad*this.rad;
 	this.res = this.ist ? 99 : 100 * r; // resistance to becoming clean
@@ -370,7 +417,7 @@ var vec3 = {
 
 var S = new Stage("stage");
 var run = setInterval(function(){
-	S.goVerlet(0.0003);
+	S.goVerlet(0.03);
 	S.resolveNodeCollisions();
 	S.resolveConstraints();
 	S.draw();
