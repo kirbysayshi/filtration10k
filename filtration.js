@@ -1,5 +1,16 @@
 (function(){
 
+var 
+	 cvs = document.getElementById("stage")
+	,dim = [ cvs.width, cvs.height, 1000 ] // dimensions: width, height of canvas
+	,ctx = cvs.getContext('2d')
+	,r = Math.random()
+	,max = (20 * r) + 5 // max num of nodes per game, minimum of 5
+	,rwm = 0 // max radius per row, for init
+	,nlist = [] // node list
+	,tlist = [] // tracker list
+	,grabbed = false; // the currently clicked node
+
 var vec3 = {
 	ignited: false
 	,setType: function(){
@@ -110,13 +121,14 @@ Node.prototype = {
 	}
 	,findPeers: function(nlist){
 		
-		var self = this,
-			i = 0, j = 0;
+		var self = this
+			,i = 0 ,j = 0
+			,n;
 		
 		// precompute distances
 		var dists = [];
 		for(i = 0; i < nlist.length; i++){
-			var n = nlist[i];
+			n = nlist[i];
 			dists[ n ] = vec3.length(vec3.sub(this.cpos, n.cpos));
 		}
 		
@@ -130,10 +142,13 @@ Node.prototype = {
 		});
 		
 		this.tto = [];
-		var inc = 0.174532925 * 10; // == 10 degree
-		var rayCount = 36;
+		var inc = 0.174532925 * 5; // == 5 degree in rads
+		var rayCount = 72;
 		var l = 1280 * 2; // just to be doubly sure
 		var p0 = this.cpos;
+		
+		ctx.strokeStyle = "#FF3399";
+		ctx.beginPath();
 		
 		for(i = 0; i < rayCount; i++){
 			var d = vec3.a( Math.cos(i*inc), Math.sin(i*inc), 0 ); // unit vector
@@ -149,19 +164,27 @@ Node.prototype = {
 				//		continue;
 				//	}
 				if(hit === true) { continue; } // if we've already found a hit, stop using this ray
-				var n = nlist[j];
+				n = nlist[j];
 				if(this === n) { continue; } // don't test with self
 				var e = vec3.sub( n.cpos, this.cpos );
 				var a = vec3.dot(e, d);
 				var sqArg = (n.rad*n.rad) - vec3.dot(e, e) + (a*a);
 				if(sqArg < 0) { continue; } // the ray and sphere do not intersect
 				var t = a - Math.sqrt( sqArg ); // the t value of the ray when the intersection occurs
+				if(t < 0) { continue; }
+				var colPoint = vec3.add(p0, vec3.scale(d, t));
 				hit = true;
 				this.tto.push(n);
-				this.ttoPoints.push( vec3.add(p0, vec3.scale(d, t)) );
+				//this.ttoPoints.push( colPoint );
+
+				ctx.moveTo(this.cpos[0], this.cpos[1]);
+				ctx.lineTo(colPoint[0], colPoint[1]);
+				
 			}
 			
 		}
+		
+		ctx.stroke();
 		
 		//for(i = 0; i < nlist.length; i++){
 		//	var n = nlist[i];
@@ -200,361 +223,339 @@ function Packet(snode, tnode, dnes){
 	this.tnode = tnode; // the target node, HOMING MISSILE ACTION!
 }
 
-
-
-function Stage(id){
-	var 
-		 cvs = document.getElementById(id)
-		,dim = [ cvs.width, cvs.height, 1000 ] // dimensions: width, height of canvas
-		,ctx = cvs.getContext('2d')
-		,r = Math.random()
-		,max = (20 * r) + 5 // max num of nodes per game, minimum of 5
-		,rwm = 0 // max radius per row, for init
-		
-		,nlist = [] // node list
-		,tlist = []; // tracker list
+function draw(){
 	
-	function draw(){
+	// z-sorting!
+	nlist.sort(function(a,b){return a.cpos[2] - b.cpos[2];});
+	
+	//ctx.fillStyle = "#000000";
+	//ctx.fillRect(0, 0, dim[0], dim[1]);
+	
+	var n;
+	for(var i = 0; i < nlist.length; i++){
+		n = nlist[i];
 		
-		// z-sorting!
-		nlist.sort(function(a,b){return a.cpos[2] - b.cpos[2];});
+		var frgba = "rgba(" + Math.floor(n.dnes * 255) 
+			+ "," + (n.ist ? 255 : 0) 
+			+ ",0,1)";
 		
-		ctx.fillStyle = "#000000";
-		ctx.fillRect(0, 0, dim[0], dim[1]);
+		//ctx.shadowOffsetX = 0;
+		//ctx.shadowOffsetY = 0;
+		//ctx.shadowBlur = 10;
+		//ctx.shadowColor = "rgba(0," + Math.floor(n.dnes * 255) + ",0,1)";
 		
-		var n;
-		for(var i = 0; i < nlist.length; i++){
-			n = nlist[i];
-			
-			var frgba = "rgba(" + Math.floor(n.dnes * 255) 
-				+ "," + (n.ist ? 255 : 0) 
-				+ ",0,1)";
-			
-			//ctx.shadowOffsetX = 0;
-			//ctx.shadowOffsetY = 0;
-			//ctx.shadowBlur = 10;
-			//ctx.shadowColor = "rgba(0," + Math.floor(n.dnes * 255) + ",0,1)";
-			
-			// draw nodes
-			ctx.fillStyle = frgba;
-			ctx.strokeStyle = "#CCCCCC";
-			ctx.lineWidth = 5;
-			ctx.beginPath();
-			ctx.arc(n.cpos[0], n.cpos[1], n.rad * (1 - (n.cpos[2] / dim[2])), 0, Math.PI*2, false);
-			ctx.stroke();
-			ctx.fill();
-			ctx.lineWidth = 1;
-			
-			// draw dnes and cnes
-			ctx.fillStyle = "#FFFFFF";
-			ctx.fillText(n.cnes + "/" + n.dnes, n.cpos[0]+n.rad+5, n.cpos[1]+n.rad+5);
-			
-			// draw constraints
-			//if(n.cto.length > 0){
-			//	ctx.beginPath();
-			//	for(var j = 0; j < n.cto.length; j++){		
-			//		ctx.moveTo(n.cpos[0], n.cpos[1]);
-			//		//ctx.lineTo(n.cto[j].cpos[0], n.cto[j].cpos[1]);
-			//		ctx.quadraticCurveTo(
-			//			 ((n.cpos[0] + n.cto[j].cpos[0]) / 2) + 30
-			//			,((n.cpos[1] + n.cto[j].cpos[1]) / 2) + 30
-			//			,n.cto[j].cpos[0]
-			//			,n.cto[j].cpos[1]
-			//			);
-			//	}
-			//	ctx.stroke();
-			//}
-			
-			// draw tracker-system bounding sphere
-			//if(n.ist === true){
-			//	ctx.strokeStyle = "#FFFFFF";
-			//	ctx.beginPath();
-			//	ctx.arc(n.cpos[0], n.cpos[1], n.bsRad(), 0, Math.PI*2, false);
-			//	ctx.stroke();
-			//}
-			
-			// draw transmit to node lines
-			ctx.strokeStyle = "#339900";
-			ctx.beginPath();
-			for(var k = 0; k < n.tto.length; k++){
-				var t = n.tto[k];
-				//if(t.ist == false) { continue; }
-				ctx.moveTo(n.cpos[0], n.cpos[1]);
-				ctx.lineTo(t.cpos[0], t.cpos[1]);
-			}
-			ctx.stroke();
-			
-			// draw points of ray intersection	
-			for(var j = 0; j < n.ttoPoints.length; j++){
-				if(n.ist == true) { ctx.fillStyle = "#3399FF"; }
-				else { ctx.fillStyle = "#CC00CC"; }
-				var p = n.ttoPoints[j];
-				ctx.beginPath();
-				ctx.arc(p[0], p[1], 2, 0, Math.PI*2, false);
-				ctx.fill();
-			}
-		}
+		// draw nodes
+		ctx.fillStyle = frgba;
+		ctx.strokeStyle = "#CCCCCC";
+		ctx.lineWidth = 5;
+		ctx.beginPath();
+		ctx.arc(n.cpos[0], n.cpos[1], n.rad * (1 - (n.cpos[2] / dim[2])), 0, Math.PI*2, false);
+		ctx.stroke();
+		ctx.fill();
+		ctx.lineWidth = 1;
 		
+		// draw dnes and cnes
 		ctx.fillStyle = "#FFFFFF";
-		ctx.fillText( MM(60)[0], 100, 20 );
-		//console.log(MM(60)[0]);
-	}
-	
-	function resolveConstraints(){
-		for(var i = 0; i < tlist.length; i++){
-			var t = tlist[i];
-			
-			for(var j = 0; j < t.cto.length; j++){
-				var n = t.cto[j];
-				if(n.ist === true) { continue; }
-				var restLength = n.ist ? (n.res + (n.rad + t.rad)) * 2 : ((n.rad + t.rad)) * 4;
-				var restLength2 = restLength*restLength;
-				var invMass = n.invMass + t.invMass;
-				if( invMass < 0.00001 ) { continue; }
-				
-				var delta  = vec3.sub(n.cpos, t.cpos);
-				var delta2 = vec3.dot(delta, delta);
-				var diff = restLength2/(delta2 + restLength2)-0.5;
-				diff *= -2;
-				
-				delta = vec3.scale(delta, diff/invMass);
-				t.cpos = vec3.add(t.cpos, vec3.scale(delta, t.invMass));
-				n.cpos = vec3.sub(n.cpos, vec3.scale(delta, n.invMass));
-			}
-		}
-	}
-	
-	function resolveNodeCollisions(){
-		var friction = 0.5;
-		for(var i = 0; i < nlist.length; i++){
-			var n1 = nlist[i];
+		ctx.fillText(n.cnes + "/" + n.dnes, n.cpos[0]+n.rad+5, n.cpos[1]+n.rad+5);
 		
-			for(var j = 0; j < nlist.length; j++){
-				var n2 = nlist[j];
-				if(n1 == n2) { continue; }
-				var colVec =  vec3.sub(n1.cpos, n2.cpos); //n1.getCollisionDepth(n2)
-				var combinedRadius = n1.rad + n2.rad;
-				var dotCol = vec3.dot(colVec, colVec); // effectively the distance squared
-				var radius2 = combinedRadius*combinedRadius;
-				
-				if(dotCol >= radius2){
-					continue;
-				}
-			
-				console.log("collision");
-				if(n1 == grabbed || n2 == grabbed){
-					console.log(grabbed);
-				}
-				
-				var invMass = n1.invMass + n2.invMass;
-				var distance = Math.sqrt(dotCol);
-				
-				//colVec = vec3.normalize(colVec);
-				// manually normalize, since we already have the distance
-				colVec[0] /= distance;
-				colVec[1] /= distance;
-				colVec[2] /= distance;
-				
-				n2.cpos = vec3.sub(n2.cpos, 
-					vec3.scale(colVec, distance * n2.invMass));
-				n1.cpos = vec3.add(n1.cpos,
-					vec3.scale(colVec, distance * n1.invMass));
-				
-				//I'm not sure if this actually works, but it seems like it
-				n2.ppos = vec3.sub(n2.ppos, 
-					vec3.scale(colVec, distance * n2.invMass * (friction)));
-				n1.ppos = vec3.add(n1.ppos,                     
-					vec3.scale(colVec, distance * n1.invMass * (friction)));
-				
-				var V0 = vec3.sub(n1.cpos, n1.ppos);
-				var V1 = vec3.sub(n2.cpos, n2.ppos);
-				var V  = vec3.sub(V0, V1);
-							
-				var Vn = vec3.scale(colVec, vec3.dot(V, colVec));
-				var Vt = vec3.sub(V, Vn);
-				
-				// normalize by mass?
-				Vt[0] /= invMass;
-				Vt[1] /= invMass;
-				Vt[2] /= invMass;
-				
-				n1.cpos = vec3.sub(n1.cpos, vec3.scale(Vt, friction*n1.invMass) );
-				n2.cpos = vec3.add(n2.cpos, vec3.scale(Vt, friction*n2.invMass) );
-				
-				return true;
-			}
+		// draw constraints
+		//if(n.cto.length > 0){
+		//	ctx.beginPath();
+		//	for(var j = 0; j < n.cto.length; j++){		
+		//		ctx.moveTo(n.cpos[0], n.cpos[1]);
+		//		//ctx.lineTo(n.cto[j].cpos[0], n.cto[j].cpos[1]);
+		//		ctx.quadraticCurveTo(
+		//			 ((n.cpos[0] + n.cto[j].cpos[0]) / 2) + 30
+		//			,((n.cpos[1] + n.cto[j].cpos[1]) / 2) + 30
+		//			,n.cto[j].cpos[0]
+		//			,n.cto[j].cpos[1]
+		//			);
+		//	}
+		//	ctx.stroke();
+		//}
 		
+		// draw tracker-system bounding sphere
+		//if(n.ist === true){
+		//	ctx.strokeStyle = "#FFFFFF";
+		//	ctx.beginPath();
+		//	ctx.arc(n.cpos[0], n.cpos[1], n.bsRad(), 0, Math.PI*2, false);
+		//	ctx.stroke();
+		//}
+		
+		// draw transmit to node lines
+		ctx.strokeStyle = "#339900";
+		ctx.beginPath();
+		for(var k = 0; k < n.tto.length; k++){
+			var t = n.tto[k];
+			//if(t.ist == false) { continue; }
+			ctx.moveTo(n.cpos[0], n.cpos[1]);
+			ctx.lineTo(t.cpos[0], t.cpos[1]);
+		}
+		ctx.stroke();
+		
+		// draw points of ray intersection	
+		for(var j = 0; j < n.ttoPoints.length; j++){
+			if(n.ist === true) { ctx.fillStyle = "#3399FF"; }
+			else { ctx.fillStyle = "#CC00CC"; }
+			var p = n.ttoPoints[j];
+			ctx.beginPath();
+			ctx.arc(p[0], p[1], 2, 0, Math.PI*2, false);
+			ctx.fill();
 		}
 	}
 	
-	function checkBounds(node){
-		//node.cpos[0] = Math.max( 0 + node.rad, Math.min(node.cpos[0], dim[0] - node.rad) );
-		//node.cpos[1] = Math.max( 0 + node.rad, Math.min(node.cpos[1], dim[1] - node.rad) );
-		//node.cpos[2] = Math.max( 0 + node.rad, Math.min(node.cpos[2], dim[2] - node.rad) );
-		//
-		//node.ppos[0] = Math.max( 0 + node.rad, Math.min(node.ppos[0], dim[0] - node.rad) );
-		//node.ppos[1] = Math.max( 0 + node.rad, Math.min(node.ppos[1], dim[1] - node.rad) );
-		//node.ppos[2] = Math.max( 0 + node.rad, Math.min(node.ppos[2], dim[2] - node.rad) );
-		
-		node.cpos[2] = 0; // uncomment this to disable 3D
-		node.ppos[2] = 0; // uncomment this to disable 3D
-	}
-	
-	function goVerlet(dt){
-		for(var i = 0; i < nlist.length; i++){
-			var n1 = nlist[i];
-			if(n1.ist) { continue; } // trackers are fixed...
-		
-			// add gravity temporarily
-			n1.acl = vec3.add(n1.acl, vec3.a(0, 0, -100));
-		
-			var temp = vec3.clone(n1.cpos);
-			n1.cpos = vec3.add(
-				vec3.add(
-					vec3.sub(n1.cpos, n1.ppos),
-					vec3.scale(n1.acl, dt*dt)
-				), n1.cpos);
-			
-			n1.ppos = temp;
-			n1.acl = vec3.a(0,0,0);
-			checkBounds(n1);
-		}
-	}
-	
-	function updateNodePeers(){
-		for(var i = 0; i < nlist.length; i++){
-			nlist[i].findPeers(nlist);
-		}
-	}
-	
-	/////////////////////////////////////
-	// Init
-	/////////////////////////////////////
-	
-	// create a few trackers
-	//var tMax = Math.floor(max / 4);
-	//for(var i = 0; i < tMax; i++){
-	//	var t = new Node(true);
-	//	// TODO: make the placement more evenly distributed
-	//	var div = vec3.a(
-	//		 Math.floor(dim[0] / (tMax + 1))
-	//		,Math.floor((dim[1] / (tMax + 1)) * Math.random())
-	//		,0);
-	//	t.cpos = vec3.scale(div, i+1);
-	//	t.ppos = vec3.scale(div, i+1);
-	//	nlist.push(t);
-	//	tlist.push(t);
-	//}
-	//
-	//// create a few nodes around the trackers, connect them to the trackers
-	//var per = Math.floor(max / tMax); // divisions for placing nodes around trackers
-	//for (var i = 0; i < tlist.length; i++) {
-	//	var t = tlist[i];
-	//	var pInt = (Math.PI * 2) / per;
-	//	for(var j = 0; j < per; j++){
-	//		var n = new Node(false);
-	//		var dir = vec3.a(
-	//			 Math.cos(pInt*j)
-	//			,Math.sin(pInt*j)
-	//			,t.cpos[2]
-	//		);
-	//		n.cpos = vec3.add(t.cpos, vec3.scale(dir, (t.rad + n.rad) * 1.5));
-	//		n.ppos = vec3.clone(n.cpos);
-	//		nlist.push(n);
-	//		t.cto.push(n);
-	//		n.cto.push(t);
-	//	}
-	//	
-	//	// connect the trackers in series
-	//	if(i !== 0){
-	//		t.cto.push( tlist[i-1] );
-	//	}
-	//}
-	//
-	//// run this so that bounding spheres are accurate
-	//resolveConstraints();
-	//resolveConstraints();
-	//
-	//// update placement of trackers based on their nodes so all are onscreen
-	//for (var i = 0; i < tlist.length; i++) {
-	//	var t = tlist[i];
-	//	var r = t.bsRad();
-	//	t.cpos[0] = Math.max( 0 + r, Math.min(t.cpos[0], dim[0] - r) );
-	//	t.cpos[1] = Math.max( 0 + r, Math.min(t.cpos[1], dim[1] - r) );
-	//	//t.cpos[2] = Math.max( 0 + r, Math.min(t.cpos[2], dim[2] - r) );
-	//	                                                          
-	//	t.ppos[0] = Math.max( 0 + r, Math.min(t.ppos[0], dim[0] - r) );
-	//	t.ppos[1] = Math.max( 0 + r, Math.min(t.ppos[1], dim[1] - r) );
-	//	//t.ppos[2] = Math.max( 0 + r, Math.min(t.ppos[2], dim[2] - r) );
-	//}
-	
-	// make a few node-to-node connections
-	//for(var i = tMax; i < nlist.length; i += tMax){
-	//	var n = nlist[i];
-	//	if(n.ist == true) continue;
-	//	n.cto.push(nlist[i-tMax]);
-	//}
-	
-	var n1 = new Node(false);
-	var n2 = new Node(false);
-	//var n3 = new Node(false);
-	
-	n1.cpos = n1.ppos = vec3.a( 20, 20, 0 );
-	n2.cpos = n2.ppos = vec3.a( 160, 20, 0 );
-	//n3.cpos = n3.ppos = vec3.a( 300, 20, 0 );
-	
-	nlist.push(n1, n2); //, n3);
-	
-	var grabbed = false;
-	
-	cvs.addEventListener("mousedown", function(e){
-		var d = 999999999;
-		var mouse = vec3.a( e.clientX, e.clientY, 0 );
-		console.log(e, mouse);
-		for(var i = 0; i < nlist.length; i++){
-			var delta = vec3.length(vec3.sub(mouse, nlist[i].cpos));
-			if(delta < d) {
-				grabbed = nlist[i];
-				d = delta;
-			}
-		}
-		console.log(grabbed);
-	}, false);
-	
-	cvs.addEventListener("mouseup", function(e){
-		grabbed = false;
-	}, false);
-	
-	cvs.addEventListener("mousemove", function(e){
-		if(grabbed !== false){
-			grabbed.cpos[0] = e.clientX;
-			grabbed.cpos[1] = e.clientY;
-			grabbed.cpos[2] = 0;
-			
-			// kill movement
-			grabbed.ppos[0] = e.clientX;
-			grabbed.ppos[1] = e.clientY;
-			grabbed.ppos[2] = 0;
-		}
-	}, false);
-	
-	return { 
-		draw: draw
-		, nlist: nlist
-		, goVerlet: goVerlet
-		, resolveNodeCollisions: resolveNodeCollisions 
-		, resolveConstraints: resolveConstraints
-		, updateNodePeers: updateNodePeers
-	};
+	ctx.fillStyle = "#FFFFFF";
+	ctx.fillText( MM(60)[0], 100, 20 );
+	//console.log(MM(60)[0]);
 }
 
-var S = new Stage("stage");
+function resolveConstraints(){
+	for(var i = 0; i < tlist.length; i++){
+		var t = tlist[i];
+		
+		for(var j = 0; j < t.cto.length; j++){
+			var n = t.cto[j];
+			if(n.ist === true) { continue; }
+			var restLength = n.ist ? (n.res + (n.rad + t.rad)) * 2 : ((n.rad + t.rad)) * 4;
+			var restLength2 = restLength*restLength;
+			var invMass = n.invMass + t.invMass;
+			if( invMass < 0.00001 ) { continue; }
+			
+			var delta  = vec3.sub(n.cpos, t.cpos);
+			var delta2 = vec3.dot(delta, delta);
+			var diff = restLength2/(delta2 + restLength2)-0.5;
+			diff *= -2;
+			
+			delta = vec3.scale(delta, diff/invMass);
+			t.cpos = vec3.add(t.cpos, vec3.scale(delta, t.invMass));
+			n.cpos = vec3.sub(n.cpos, vec3.scale(delta, n.invMass));
+		}
+	}
+}
+
+function resolveNodeCollisions(){
+	var friction = 0.5;
+	for(var i = 0; i < nlist.length; i++){
+		var n1 = nlist[i];
+	
+		for(var j = 0; j < nlist.length; j++){
+			var n2 = nlist[j];
+			if(n1 == n2) { continue; }
+			var colVec =  vec3.sub(n1.cpos, n2.cpos); //n1.getCollisionDepth(n2)
+			var combinedRadius = n1.rad + n2.rad;
+			var dotCol = vec3.dot(colVec, colVec); // effectively the distance squared
+			var radius2 = combinedRadius*combinedRadius;
+			
+			if(dotCol >= radius2){
+				continue;
+			}
+		
+			console.log("collision");
+			if(n1 == grabbed || n2 == grabbed){
+				console.log(grabbed);
+			}
+			
+			var invMass = n1.invMass + n2.invMass;
+			var distance = Math.sqrt(dotCol);
+			
+			//colVec = vec3.normalize(colVec);
+			// manually normalize, since we already have the distance
+			colVec[0] /= distance;
+			colVec[1] /= distance;
+			colVec[2] /= distance;
+			
+			n2.cpos = vec3.sub(n2.cpos, 
+				vec3.scale(colVec, distance * n2.invMass));
+			n1.cpos = vec3.add(n1.cpos,
+				vec3.scale(colVec, distance * n1.invMass));
+			
+			//I'm not sure if this actually works, but it seems like it
+			n2.ppos = vec3.sub(n2.ppos, 
+				vec3.scale(colVec, distance * n2.invMass * (friction)));
+			n1.ppos = vec3.add(n1.ppos,                     
+				vec3.scale(colVec, distance * n1.invMass * (friction)));
+			
+			var V0 = vec3.sub(n1.cpos, n1.ppos);
+			var V1 = vec3.sub(n2.cpos, n2.ppos);
+			var V  = vec3.sub(V0, V1);
+						
+			var Vn = vec3.scale(colVec, vec3.dot(V, colVec));
+			var Vt = vec3.sub(V, Vn);
+			
+			// normalize by mass?
+			Vt[0] /= invMass;
+			Vt[1] /= invMass;
+			Vt[2] /= invMass;
+			
+			n1.cpos = vec3.sub(n1.cpos, vec3.scale(Vt, friction*n1.invMass) );
+			n2.cpos = vec3.add(n2.cpos, vec3.scale(Vt, friction*n2.invMass) );
+			
+			return true;
+		}
+	
+	}
+}
+
+function checkBounds(node){
+	//node.cpos[0] = Math.max( 0 + node.rad, Math.min(node.cpos[0], dim[0] - node.rad) );
+	//node.cpos[1] = Math.max( 0 + node.rad, Math.min(node.cpos[1], dim[1] - node.rad) );
+	//node.cpos[2] = Math.max( 0 + node.rad, Math.min(node.cpos[2], dim[2] - node.rad) );
+	//
+	//node.ppos[0] = Math.max( 0 + node.rad, Math.min(node.ppos[0], dim[0] - node.rad) );
+	//node.ppos[1] = Math.max( 0 + node.rad, Math.min(node.ppos[1], dim[1] - node.rad) );
+	//node.ppos[2] = Math.max( 0 + node.rad, Math.min(node.ppos[2], dim[2] - node.rad) );
+	
+	node.cpos[2] = 0; // uncomment this to disable 3D
+	node.ppos[2] = 0; // uncomment this to disable 3D
+}
+
+function goVerlet(dt){
+	for(var i = 0; i < nlist.length; i++){
+		var n1 = nlist[i];
+		if(n1.ist) { continue; } // trackers are fixed...
+	
+		// add gravity temporarily
+		n1.acl = vec3.add(n1.acl, vec3.a(0, 0, -100));
+	
+		var temp = vec3.clone(n1.cpos);
+		n1.cpos = vec3.add(
+			vec3.add(
+				vec3.sub(n1.cpos, n1.ppos),
+				vec3.scale(n1.acl, dt*dt)
+			), n1.cpos);
+		
+		n1.ppos = temp;
+		n1.acl = vec3.a(0,0,0);
+		checkBounds(n1);
+	}
+}
+
+function updateNodePeers(){
+	for(var i = 0; i < nlist.length; i++){
+		nlist[i].findPeers(nlist);
+	}
+}
+
+/////////////////////////////////////
+// Init
+/////////////////////////////////////
+
+
+
+// create a few trackers
+var tMax = Math.floor(max / 4);
+for(var i = 0; i < tMax; i++){
+	var t = new Node(true);
+	// TODO: make the placement more evenly distributed
+	var div = vec3.a(
+		 Math.floor(dim[0] / (tMax + 1))
+		,Math.floor((dim[1] / (tMax + 1)) * Math.random())
+		,0);
+	t.cpos = vec3.scale(div, i+1);
+	t.ppos = vec3.scale(div, i+1);
+	nlist.push(t);
+	tlist.push(t);
+}
+
+// create a few nodes around the trackers, connect them to the trackers
+var per = Math.floor(max / tMax); // divisions for placing nodes around trackers
+for (var i = 0; i < tlist.length; i++) {
+	var t = tlist[i];
+	var pInt = (Math.PI * 2) / per;
+	for(var j = 0; j < per; j++){
+		var n = new Node(false);
+		var dir = vec3.a(
+			 Math.cos(pInt*j)
+			,Math.sin(pInt*j)
+			,t.cpos[2]
+		);
+		n.cpos = vec3.add(t.cpos, vec3.scale(dir, (t.rad + n.rad) * 1.5));
+		n.ppos = vec3.clone(n.cpos);
+		nlist.push(n);
+		t.cto.push(n);
+		n.cto.push(t);
+	}
+	
+	// connect the trackers in series
+	if(i !== 0){
+		t.cto.push( tlist[i-1] );
+	}
+}
+
+// run this so that bounding spheres are accurate
+resolveConstraints();
+resolveConstraints();
+
+// update placement of trackers based on their nodes so all are onscreen
+for (var i = 0; i < tlist.length; i++) {
+	var t = tlist[i];
+	var r = t.bsRad();
+	t.cpos[0] = Math.max( 0 + r, Math.min(t.cpos[0], dim[0] - r) );
+	t.cpos[1] = Math.max( 0 + r, Math.min(t.cpos[1], dim[1] - r) );
+	//t.cpos[2] = Math.max( 0 + r, Math.min(t.cpos[2], dim[2] - r) );
+	                                                          
+	t.ppos[0] = Math.max( 0 + r, Math.min(t.ppos[0], dim[0] - r) );
+	t.ppos[1] = Math.max( 0 + r, Math.min(t.ppos[1], dim[1] - r) );
+	//t.ppos[2] = Math.max( 0 + r, Math.min(t.ppos[2], dim[2] - r) );
+}
+
+// make a few node-to-node connections
+//for(var i = tMax; i < nlist.length; i += tMax){
+//	var n = nlist[i];
+//	if(n.ist == true) continue;
+//	n.cto.push(nlist[i-tMax]);
+//}
+
+//var n1 = new Node(false);
+//var n2 = new Node(false);
+//
+//n1.cpos = n1.ppos = vec3.a( 20, 20, 0 );
+//n2.cpos = n2.ppos = vec3.a( 160, 20, 0 );
+//
+//nlist.push(n1, n2); //, n3);
+
+
+cvs.addEventListener("mousedown", function(e){
+	var d = 999999999;
+	var mouse = vec3.a( e.clientX, e.clientY, 0 );
+	console.log(e, mouse);
+	for(var i = 0; i < nlist.length; i++){
+		var delta = vec3.length(vec3.sub(mouse, nlist[i].cpos));
+		if(delta < d) {
+			grabbed = nlist[i];
+			d = delta;
+		}
+	}
+	console.log(grabbed);
+}, false);
+
+cvs.addEventListener("mouseup", function(e){
+	grabbed = false;
+}, false);
+
+cvs.addEventListener("mousemove", function(e){
+	if(grabbed !== false){
+		grabbed.cpos[0] = e.clientX;
+		grabbed.cpos[1] = e.clientY;
+		grabbed.cpos[2] = 0;
+		
+		// kill movement
+		grabbed.ppos[0] = e.clientX;
+		grabbed.ppos[1] = e.clientY;
+		grabbed.ppos[2] = 0;
+	}
+}, false);
+
 var run = setInterval(function(){
-	S.goVerlet(0.03);
-	S.resolveNodeCollisions();
-	S.resolveConstraints();
-	S.updateNodePeers();
-	S.draw();
+	// temporary, for debug purposes
+	ctx.fillStyle = "#000000";
+	ctx.fillRect(0, 0, dim[0], dim[1]);
+	
+	goVerlet(0.03);
+	resolveNodeCollisions();
+	resolveConstraints();
+	updateNodePeers();
+	draw();
 	
 }, 16);
 
