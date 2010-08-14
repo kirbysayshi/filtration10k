@@ -65,6 +65,7 @@ function Node(ist){
 	this.dnes = 50; // how dirty the node is 
 	this.cnes = 50; // how clean the node is 
 	this.tto = []; // transmitting to
+	this.ttoPoints = []; // points where the rays intersect
 }
 
 Node.prototype = {
@@ -108,29 +109,48 @@ Node.prototype = {
 		return d + brad;
 	}
 	,findPeers: function(nlist){
+		
+		var self = this,
+			i = 0, j = 0;
+		
+		// precompute distances
+		var dists = [];
+		for(i = 0; i < nlist.length; i++){
+			var n = nlist[i];
+			dists[ n ] = vec3.length(vec3.sub(this.cpos, n.cpos));
+		}
+		
 		// sort nlist by distance from this
-		var self = this;
 		nlist.sort(function(a,b){
-			var la = vec3.length(vec3.sub(self.cpos, a.cpos));
-			var lb = vec3.length(vec3.sub(self.cpos, b.cpos));
-			if(la > lb) { return -1; }
-			else if(la < lb) { return 1; }
-			else if(la == lb) { return 0; }
+			//var la = vec3.length(vec3.sub(self.cpos, a.cpos));
+			//var lb = vec3.length(vec3.sub(self.cpos, b.cpos));
+			if(dists[a] > dists[b]) { return -1; }
+			else if(dists[a] < dists[b]) { return 1; }
+			else if(dists[a] == dists[b]) { return 0; }
 		});
 		
 		this.tto = [];
-		var inc = 0.0174532925 * 4; // == 4 degree
-		var rayCount = 90;
+		var inc = 0.174532925 * 10; // == 10 degree
+		var rayCount = 36;
 		var l = 1280 * 2; // just to be doubly sure
 		var p0 = this.cpos;
-		var i, j;
+		
 		for(i = 0; i < rayCount; i++){
-			var d = vec3.a( Math.cos(i*inc), Math.sin(i*inc), 0 );
+			var d = vec3.a( Math.cos(i*inc), Math.sin(i*inc), 0 ); // unit vector
 			var hit = false;
 			for(j = 0; j < nlist.length; j++){
+				//if( 
+				//	(function(){ 
+				//		for(var i = 0; i < n.cto.length; i++){ 
+				//			if(n.cto[i] === n) { return true; } 
+				//		} 
+				//		return false; 
+				//	})() ) {
+				//		continue;
+				//	}
 				if(hit === true) { continue; } // if we've already found a hit, stop using this ray
 				var n = nlist[j];
-				if(this == n) { continue; }
+				if(this === n) { continue; } // don't test with self
 				var e = vec3.sub( n.cpos, this.cpos );
 				var a = vec3.dot(e, d);
 				var sqArg = (n.rad*n.rad) - vec3.dot(e, e) + (a*a);
@@ -138,9 +158,15 @@ Node.prototype = {
 				var t = a - Math.sqrt( sqArg ); // the t value of the ray when the intersection occurs
 				hit = true;
 				this.tto.push(n);
+				this.ttoPoints.push( vec3.add(p0, vec3.scale(d, t)) );
 			}
 			
 		}
+		
+		//for(i = 0; i < nlist.length; i++){
+		//	var n = nlist[i];
+		//	
+		//}
 		
 		// remove dups from tto
 		var unique = [];
@@ -157,6 +183,10 @@ Node.prototype = {
 		}
 		
 		this.tto = unique;
+		
+		if(this.ttoPoints.length > 10){
+			this.ttoPoints = this.ttoPoints.slice(10);
+		}
 	}
 
 };
@@ -248,10 +278,21 @@ function Stage(id){
 			ctx.beginPath();
 			for(var k = 0; k < n.tto.length; k++){
 				var t = n.tto[k];
+				//if(t.ist == false) { continue; }
 				ctx.moveTo(n.cpos[0], n.cpos[1]);
 				ctx.lineTo(t.cpos[0], t.cpos[1]);
 			}
 			ctx.stroke();
+			
+			// draw points of ray intersection	
+			for(var j = 0; j < n.ttoPoints.length; j++){
+				if(n.ist == true) { ctx.fillStyle = "#3399FF"; }
+				else { ctx.fillStyle = "#CC00CC"; }
+				var p = n.ttoPoints[j];
+				ctx.beginPath();
+				ctx.arc(p[0], p[1], 2, 0, Math.PI*2, false);
+				ctx.fill();
+			}
 		}
 		
 		ctx.fillStyle = "#FFFFFF";
@@ -391,61 +432,61 @@ function Stage(id){
 	/////////////////////////////////////
 	
 	// create a few trackers
-	var tMax = Math.floor(max / 4);
-	for(var i = 0; i < tMax; i++){
-		var t = new Node(true);
-		// TODO: make the placement more evenly distributed
-		var div = vec3.a(
-			 Math.floor(dim[0] / (tMax + 1))
-			,Math.floor((dim[1] / (tMax + 1)) * Math.random())
-			,0);
-		t.cpos = vec3.scale(div, i+1);
-		t.ppos = vec3.scale(div, i+1);
-		nlist.push(t);
-		tlist.push(t);
-	}
-	
-	// create a few nodes around the trackers, connect them to the trackers
-	var per = Math.floor(max / tMax); // divisions for placing nodes around trackers
-	for (var i = 0; i < tlist.length; i++) {
-		var t = tlist[i];
-		var pInt = (Math.PI * 2) / per;
-		for(var j = 0; j < per; j++){
-			var n = new Node(false);
-			var dir = vec3.a(
-				 Math.cos(pInt*j)
-				,Math.sin(pInt*j)
-				,t.cpos[2]
-			);
-			n.cpos = vec3.add(t.cpos, vec3.scale(dir, (t.rad + n.rad) * 1.5));
-			n.ppos = vec3.clone(n.cpos);
-			nlist.push(n);
-			t.cto.push(n);
-			n.cto.push(t);
-		}
-		
-		// connect the trackers in series
-		if(i !== 0){
-			t.cto.push( tlist[i-1] );
-		}
-	}
-	
-	// run this so that bounding spheres are accurate
-	resolveConstraints();
-	resolveConstraints();
-	
-	// update placement of trackers based on their nodes so all are onscreen
-	for (var i = 0; i < tlist.length; i++) {
-		var t = tlist[i];
-		var r = t.bsRad();
-		t.cpos[0] = Math.max( 0 + r, Math.min(t.cpos[0], dim[0] - r) );
-		t.cpos[1] = Math.max( 0 + r, Math.min(t.cpos[1], dim[1] - r) );
-		//t.cpos[2] = Math.max( 0 + r, Math.min(t.cpos[2], dim[2] - r) );
-		                                                          
-		t.ppos[0] = Math.max( 0 + r, Math.min(t.ppos[0], dim[0] - r) );
-		t.ppos[1] = Math.max( 0 + r, Math.min(t.ppos[1], dim[1] - r) );
-		//t.ppos[2] = Math.max( 0 + r, Math.min(t.ppos[2], dim[2] - r) );
-	}
+	//var tMax = Math.floor(max / 4);
+	//for(var i = 0; i < tMax; i++){
+	//	var t = new Node(true);
+	//	// TODO: make the placement more evenly distributed
+	//	var div = vec3.a(
+	//		 Math.floor(dim[0] / (tMax + 1))
+	//		,Math.floor((dim[1] / (tMax + 1)) * Math.random())
+	//		,0);
+	//	t.cpos = vec3.scale(div, i+1);
+	//	t.ppos = vec3.scale(div, i+1);
+	//	nlist.push(t);
+	//	tlist.push(t);
+	//}
+	//
+	//// create a few nodes around the trackers, connect them to the trackers
+	//var per = Math.floor(max / tMax); // divisions for placing nodes around trackers
+	//for (var i = 0; i < tlist.length; i++) {
+	//	var t = tlist[i];
+	//	var pInt = (Math.PI * 2) / per;
+	//	for(var j = 0; j < per; j++){
+	//		var n = new Node(false);
+	//		var dir = vec3.a(
+	//			 Math.cos(pInt*j)
+	//			,Math.sin(pInt*j)
+	//			,t.cpos[2]
+	//		);
+	//		n.cpos = vec3.add(t.cpos, vec3.scale(dir, (t.rad + n.rad) * 1.5));
+	//		n.ppos = vec3.clone(n.cpos);
+	//		nlist.push(n);
+	//		t.cto.push(n);
+	//		n.cto.push(t);
+	//	}
+	//	
+	//	// connect the trackers in series
+	//	if(i !== 0){
+	//		t.cto.push( tlist[i-1] );
+	//	}
+	//}
+	//
+	//// run this so that bounding spheres are accurate
+	//resolveConstraints();
+	//resolveConstraints();
+	//
+	//// update placement of trackers based on their nodes so all are onscreen
+	//for (var i = 0; i < tlist.length; i++) {
+	//	var t = tlist[i];
+	//	var r = t.bsRad();
+	//	t.cpos[0] = Math.max( 0 + r, Math.min(t.cpos[0], dim[0] - r) );
+	//	t.cpos[1] = Math.max( 0 + r, Math.min(t.cpos[1], dim[1] - r) );
+	//	//t.cpos[2] = Math.max( 0 + r, Math.min(t.cpos[2], dim[2] - r) );
+	//	                                                          
+	//	t.ppos[0] = Math.max( 0 + r, Math.min(t.ppos[0], dim[0] - r) );
+	//	t.ppos[1] = Math.max( 0 + r, Math.min(t.ppos[1], dim[1] - r) );
+	//	//t.ppos[2] = Math.max( 0 + r, Math.min(t.ppos[2], dim[2] - r) );
+	//}
 	
 	// make a few node-to-node connections
 	//for(var i = tMax; i < nlist.length; i += tMax){
@@ -453,6 +494,16 @@ function Stage(id){
 	//	if(n.ist == true) continue;
 	//	n.cto.push(nlist[i-tMax]);
 	//}
+	
+	var n1 = new Node(false);
+	var n2 = new Node(false);
+	//var n3 = new Node(false);
+	
+	n1.cpos = n1.ppos = vec3.a( 20, 20, 0 );
+	n2.cpos = n2.ppos = vec3.a( 160, 20, 0 );
+	//n3.cpos = n3.ppos = vec3.a( 300, 20, 0 );
+	
+	nlist.push(n1, n2); //, n3);
 	
 	var grabbed = false;
 	
@@ -467,6 +518,7 @@ function Stage(id){
 				d = delta;
 			}
 		}
+		console.log(grabbed);
 	}, false);
 	
 	cvs.addEventListener("mouseup", function(e){
