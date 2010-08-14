@@ -53,7 +53,7 @@ var vec3 = {
 function Node(ist){
 	var r = Math.random();
 	this.ist = ist;//r > 0.9 ? true : false; // is source of infection
-	this.rad = (50 * r) + 10; // radius/bandwidth/gravity, min of 10
+	this.rad = (30 * r) + 5; // radius/bandwidth/gravity, min of 5
 	this.rad2 = this.rad*this.rad;
 	this.res = this.ist ? 99 : (100 * r) + 10; // resistance to becoming clean, min of 10
 	this.ppos = vec3.a(0,0,0); // previous position
@@ -62,7 +62,9 @@ function Node(ist){
 	// TODO: make a tracker's mass... massive
 	this.invMass = this.ist ? 1/9000 : 1/this.rad;
 	this.cto = []; // connected to
-	this.dnes = 1; // how dirty the node is (between 0 and 1)
+	this.dnes = 50; // how dirty the node is 
+	this.cnes = 50; // how clean the node is 
+	this.tto = []; // transmitting to
 }
 
 Node.prototype = {
@@ -105,11 +107,56 @@ Node.prototype = {
 		var d = vec3.length( vec3.sub(this.cpos, bnode.cpos) );
 		return d + brad;
 	}
-	,findPeers: function(){
-		// shoot lines every n radians
-		// for each line, test for intersecting nodes
-		// only take the closest nodes in the event of two collisions on the same line
-
+	,findPeers: function(nlist){
+		// sort nlist by distance from this
+		var self = this;
+		nlist.sort(function(a,b){
+			var la = vec3.length(vec3.sub(self.cpos, a.cpos));
+			var lb = vec3.length(vec3.sub(self.cpos, b.cpos));
+			if(la > lb) { return -1; }
+			else if(la < lb) { return 1; }
+			else if(la == lb) { return 0; }
+		});
+		
+		this.tto = [];
+		var inc = 0.0174532925 * 4; // == 4 degree
+		var rayCount = 90;
+		var l = 1280 * 2; // just to be doubly sure
+		var p0 = this.cpos;
+		var i, j;
+		for(i = 0; i < rayCount; i++){
+			var d = vec3.a( Math.cos(i*inc), Math.sin(i*inc), 0 );
+			var hit = false;
+			for(j = 0; j < nlist.length; j++){
+				if(hit === true) { continue; } // if we've already found a hit, stop using this ray
+				var n = nlist[j];
+				if(this == n) { continue; }
+				var e = vec3.sub( n.cpos, this.cpos );
+				var a = vec3.dot(e, d);
+				var sqArg = (n.rad*n.rad) - vec3.dot(e, e) + (a*a);
+				if(sqArg < 0) { continue; } // the ray and sphere do not intersect
+				var t = a - Math.sqrt( sqArg ); // the t value of the ray when the intersection occurs
+				hit = true;
+				this.tto.push(n);
+			}
+			
+		}
+		
+		// remove dups from tto
+		var unique = [];
+		for(i = 0; i < this.tto.length; i++){
+			var found = false;
+			for(j = 0; j < unique.length; j++){
+				if( this.tto[i] == unique[j] ){
+					found = true;
+				}
+			}
+			if(found === false){
+				unique.push(this.tto[i]);
+			}
+		}
+		
+		this.tto = unique;
 	}
 
 };
@@ -139,10 +186,13 @@ function Stage(id){
 	
 	function draw(){
 		
+		// z-sorting!
+		nlist.sort(function(a,b){return a.cpos[2] - b.cpos[2];});
+		
 		ctx.fillStyle = "#000000";
 		ctx.fillRect(0, 0, dim[0], dim[1]);
 		
-		var n = {};
+		var n;
 		for(var i = 0; i < nlist.length; i++){
 			n = nlist[i];
 			
@@ -155,6 +205,7 @@ function Stage(id){
 			//ctx.shadowBlur = 10;
 			//ctx.shadowColor = "rgba(0," + Math.floor(n.dnes * 255) + ",0,1)";
 			
+			// draw nodes
 			ctx.fillStyle = frgba;
 			ctx.strokeStyle = "#CCCCCC";
 			ctx.lineWidth = 5;
@@ -164,26 +215,43 @@ function Stage(id){
 			ctx.fill();
 			ctx.lineWidth = 1;
 			
-			if(n.cto.length > 0){
-				ctx.beginPath();
-				for(var j = 0; j < n.cto.length; j++){		
-					ctx.moveTo(n.cpos[0], n.cpos[1]);
-					//ctx.lineTo(n.cto[j].cpos[0], n.cto[j].cpos[1]);
-					ctx.quadraticCurveTo(
-						 ((n.cpos[0] + n.cto[j].cpos[0]) / 2) + 30
-						,((n.cpos[1] + n.cto[j].cpos[1]) / 2) + 30
-						,n.cto[j].cpos[0]
-						,n.cto[j].cpos[1]
-						);
-				}
-				ctx.stroke();
+			// draw dnes and cnes
+			ctx.fillStyle = "#FFFFFF";
+			ctx.fillText(n.cnes + "/" + n.dnes, n.cpos[0]+n.rad+5, n.cpos[1]+n.rad+5);
+			
+			// draw constraints
+			//if(n.cto.length > 0){
+			//	ctx.beginPath();
+			//	for(var j = 0; j < n.cto.length; j++){		
+			//		ctx.moveTo(n.cpos[0], n.cpos[1]);
+			//		//ctx.lineTo(n.cto[j].cpos[0], n.cto[j].cpos[1]);
+			//		ctx.quadraticCurveTo(
+			//			 ((n.cpos[0] + n.cto[j].cpos[0]) / 2) + 30
+			//			,((n.cpos[1] + n.cto[j].cpos[1]) / 2) + 30
+			//			,n.cto[j].cpos[0]
+			//			,n.cto[j].cpos[1]
+			//			);
+			//	}
+			//	ctx.stroke();
+			//}
+			
+			// draw tracker-system bounding sphere
+			//if(n.ist === true){
+			//	ctx.strokeStyle = "#FFFFFF";
+			//	ctx.beginPath();
+			//	ctx.arc(n.cpos[0], n.cpos[1], n.bsRad(), 0, Math.PI*2, false);
+			//	ctx.stroke();
+			//}
+			
+			// draw transmit to node lines
+			ctx.strokeStyle = "#339900";
+			ctx.beginPath();
+			for(var k = 0; k < n.tto.length; k++){
+				var t = n.tto[k];
+				ctx.moveTo(n.cpos[0], n.cpos[1]);
+				ctx.lineTo(t.cpos[0], t.cpos[1]);
 			}
-			if(n.ist === true){
-				ctx.strokeStyle = "#FFFFFF";
-				ctx.beginPath();
-				ctx.arc(n.cpos[0], n.cpos[1], n.bsRad(), 0, Math.PI*2, false);
-				ctx.stroke();
-			}
+			ctx.stroke();
 		}
 		
 		ctx.fillStyle = "#FFFFFF";
@@ -198,7 +266,7 @@ function Stage(id){
 			for(var j = 0; j < t.cto.length; j++){
 				var n = t.cto[j];
 				if(n.ist === true) { continue; }
-				var restLength = n.ist ? (n.res + (n.rad + t.rad)) * 2 : ((n.rad + t.rad)) * 2;
+				var restLength = n.ist ? (n.res + (n.rad + t.rad)) * 2 : ((n.rad + t.rad)) * 4;
 				var restLength2 = restLength*restLength;
 				var invMass = n.invMass + t.invMass;
 				if( invMass < 0.00001 ) { continue; }
@@ -310,8 +378,12 @@ function Stage(id){
 			n1.acl = vec3.a(0,0,0);
 			checkBounds(n1);
 		}
-		// z-sorting!
-		nlist.sort(function(a,b){return a.cpos[2] - b.cpos[2];});
+	}
+	
+	function updateNodePeers(){
+		for(var i = 0; i < nlist.length; i++){
+			nlist[i].findPeers(nlist);
+		}
 	}
 	
 	/////////////////////////////////////
@@ -322,6 +394,7 @@ function Stage(id){
 	var tMax = Math.floor(max / 4);
 	for(var i = 0; i < tMax; i++){
 		var t = new Node(true);
+		// TODO: make the placement more evenly distributed
 		var div = vec3.a(
 			 Math.floor(dim[0] / (tMax + 1))
 			,Math.floor((dim[1] / (tMax + 1)) * Math.random())
@@ -358,6 +431,7 @@ function Stage(id){
 	}
 	
 	// run this so that bounding spheres are accurate
+	resolveConstraints();
 	resolveConstraints();
 	
 	// update placement of trackers based on their nodes so all are onscreen
@@ -418,6 +492,7 @@ function Stage(id){
 		, goVerlet: goVerlet
 		, resolveNodeCollisions: resolveNodeCollisions 
 		, resolveConstraints: resolveConstraints
+		, updateNodePeers: updateNodePeers
 	};
 }
 
@@ -426,6 +501,7 @@ var run = setInterval(function(){
 	S.goVerlet(0.03);
 	S.resolveNodeCollisions();
 	S.resolveConstraints();
+	S.updateNodePeers();
 	S.draw();
 	
 }, 16);
