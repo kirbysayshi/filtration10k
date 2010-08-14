@@ -136,8 +136,8 @@ Node.prototype = {
 		nlist.sort(function(a,b){
 			//var la = vec3.length(vec3.sub(self.cpos, a.cpos));
 			//var lb = vec3.length(vec3.sub(self.cpos, b.cpos));
-			if(dists[a] > dists[b]) { return -1; }
-			else if(dists[a] < dists[b]) { return 1; }
+			if(dists[a] > dists[b]) { return 1; }
+			else if(dists[a] < dists[b]) { return -1; }
 			else if(dists[a] == dists[b]) { return 0; }
 		});
 		
@@ -152,7 +152,7 @@ Node.prototype = {
 		
 		for(i = 0; i < rayCount; i++){
 			var d = vec3.a( Math.cos(i*inc), Math.sin(i*inc), 0 ); // unit vector
-			var hit = false;
+			
 			for(j = 0; j < nlist.length; j++){
 				//if( 
 				//	(function(){ 
@@ -163,7 +163,7 @@ Node.prototype = {
 				//	})() ) {
 				//		continue;
 				//	}
-				if(hit === true) { continue; } // if we've already found a hit, stop using this ray
+				
 				n = nlist[j];
 				if(this === n) { continue; } // don't test with self
 				var e = vec3.sub( n.cpos, this.cpos );
@@ -173,13 +173,15 @@ Node.prototype = {
 				var t = a - Math.sqrt( sqArg ); // the t value of the ray when the intersection occurs
 				if(t < 0) { continue; }
 				var colPoint = vec3.add(p0, vec3.scale(d, t));
-				hit = true;
+
 				this.tto.push(n);
 				//this.ttoPoints.push( colPoint );
 
 				ctx.moveTo(this.cpos[0], this.cpos[1]);
 				ctx.lineTo(colPoint[0], colPoint[1]);
 				
+				// if we get this far, stop using this ray
+				break;
 			}
 			
 		}
@@ -350,7 +352,7 @@ function resolveNodeCollisions(){
 				continue;
 			}
 		
-			console.log("collision");
+			//console.log("collision");
 			if(n1 == grabbed || n2 == grabbed){
 				console.log(grabbed);
 			}
