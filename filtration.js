@@ -9,7 +9,9 @@ var
 	,rwm = 0 // max radius per row, for init
 	,nlist = [] // node list
 	,tlist = [] // tracker list
-	,grabbed = false; // the currently clicked node
+	,grabbed = false // the currently clicked node
+	,grid = [] // grid[col][row]
+	,div = 50; // number of columns/rows in grid
 
 var vec3 = {
 	ignited: false
@@ -152,6 +154,8 @@ Node.prototype = {
 		
 		for(i = 0; i < rayCount; i++){
 			var d = vec3.a( Math.cos(i*inc), Math.sin(i*inc), 0 ); // unit vector
+			
+			
 			
 			for(j = 0; j < nlist.length; j++){
 				//if( 
@@ -306,6 +310,20 @@ function draw(){
 		}
 	}
 	
+	// draw grid where nodes reside
+	for(var c = 0; c < grid.length; c++){
+		var col = grid[c];
+		for(var r = 0; r < col.length; r++){
+			var cell = col[r];
+			
+			for(var h = 0; h < cell.length; h++){
+				ctx.strokeStyle = "#CCCCCC";
+				ctx.strokeRect(c*div, r*div, div, div);
+			}
+			
+		}
+	}
+	
 	ctx.fillStyle = "#FFFFFF";
 	ctx.fillText( MM(60)[0], 100, 20 );
 	//console.log(MM(60)[0]);
@@ -438,9 +456,134 @@ function updateNodePeers(){
 	}
 }
 
+function updateGrid(){
+	var 
+		rows = Math.floor(dim[1] / div)
+		,cols = Math.floor(dim[0] / div)
+		,i = 0, j = 0;
+	
+	grid = []; // blank it out
+	
+	// init grid arrays
+	for(i = 0; i < cols; i++){
+		grid[i] = [];
+		for(j = 0; j < rows; j++){
+			grid[i][j] = [];
+		}
+	}
+
+	// this assumes radius is not larger than 2*div
+	for(i = 0; i < nlist.length; i++){
+
+		var 
+			n = nlist[i],
+			col = Math.floor(n.cpos[0] / div),
+			row = Math.floor(n.cpos[1] / div),
+			T  = Math.floor( (n.cpos[1] - n.rad) / div),
+			B  = Math.floor( (n.cpos[1] + n.rad) / div),
+			L  = Math.floor( (n.cpos[0] - n.rad) / div),
+			R  = Math.floor( (n.cpos[0] + n.rad) / div);
+		
+		// add node to cell its center is in (base)	
+		if(col >= 0 && col < cols && row >= 0 && row < rows){ grid[col][row].push(n); }
+		
+		// Top cell, Bottom cell, Left cell, Right cell				
+		if( T !== row && T >= 0 && T < rows && col < cols && col >= 0){ grid[col][T].push(n); }
+		if( B !== row && B >= 0 && B < rows && col < cols && col >= 0){ grid[col][B].push(n); }
+		if( L !== col && L >= 0 && L < cols && row < rows && row >= 0){ grid[L][row].push(n); }
+		if( R !== row && R >= 0 && R < cols && row < rows && row >= 0){ grid[R][row].push(n); }
+		
+		// Top Right cell, Bottom Right cell, Top Left cell, Bottom Left cell
+		if( R !== col && T !== row && R < cols && T < rows && R >= 0 && T >= 0 ){ grid[R][T].push(n); }
+		if( R !== col && B !== row && R < cols && B < rows && R >= 0 && B >= 0 ){ grid[R][B].push(n); }
+		if( L !== col && T !== row && L < cols && T < rows && L >= 0 && T >= 0 ){ grid[L][T].push(n); }
+		if( L !== col && B !== row && L < cols && B < rows && L >= 0 && B >= 0 ){ grid[L][B].push(n); }
+	}
+	
+	//function Bresenham(x0, x1, y0, y1,col){
+	//		var steep = Math.abs(y1 - y0) > Math.abs(x1 - x0)
+	//	 if (steep){
+	//	   // swap
+	//	   var tmp=x0;x0=y0;y0=tmp
+	//	   tmp=x1;x1=y1;y1=tmp
+	//	 }
+	//	 if (x0 > x1){
+	//	   // swap
+	//	   var tmp=x0;x0=x1;x1=tmp;
+	//	   tmp=y0;y0=y1;y1=tmp;
+	//	  }
+    //
+	//	 var deltax = x1 - x0
+	//	 var deltay = Math.abs(y1 - y0)
+	//	 var error = 0
+	//	 var ystep
+	//	 var y = y0
+	//	 if (y0<y1) ystep = 1; else ystep = -1
+	//	 for (x=x0;x<=x1;x++){
+	//	   if (steep) plot(y,x,col); else plot(x,y,col)
+	//	   error = error + deltay
+	//	   if (2*error >= deltax){
+	//	     y = y + ystep
+	//	     error = error - deltax
+	//	   }
+	//	 }
+	//	}
+}
+
+function getGridLine(start, dir, length){
+	var startCol = Math.floor( start[0] / div );
+	var startRow = Math.floor( start[1] / div );
+	
+}
+
+function getGridLine(x1, y1, x2, y2){
+	var cells = [];
+    var dx = x2 - x1; var sx = 1;
+    var dy = y2 - y1; var sy = 1;
+
+    if (dx < 0) {
+        sx = -1;
+        dx = -dx;
+    }
+    if (dy < 0) {
+        sy = -1;
+        dy = -dy;
+    }
+
+    dx = dx << 1;
+    dy = dy << 1;
+    cells.push([x1, y1]);
+	var fraction = 0;
+    if (dy < dx) {    
+        fraction = dy - (dx>>1);
+        while (x1 != x2){
+            if (fraction >= 0) {
+                y1 += sy;
+                fraction -= dx;
+            }
+            fraction += dy;
+            x1 += sx;
+            cells.push([x1, y1]);
+        }
+    } else {
+        fraction = dx - (dy>>1);        
+        while (y1 != y2) {
+            if (fraction >= 0) {
+                x1 += sx;
+                fraction -= dy;
+            }
+            fraction += dx;
+            y1 += sy;
+            cells.push([x1, y1]);
+        }    
+    }
+	return cells;
+}
+
 /////////////////////////////////////
 // Init
 /////////////////////////////////////
+
 
 
 
@@ -449,12 +592,12 @@ var tMax = Math.floor(max / 4);
 for(var i = 0; i < tMax; i++){
 	var t = new Node(true);
 	// TODO: make the placement more evenly distributed
-	var div = vec3.a(
+	var sec = vec3.a(
 		 Math.floor(dim[0] / (tMax + 1))
 		,Math.floor((dim[1] / (tMax + 1)) * Math.random())
 		,0);
-	t.cpos = vec3.scale(div, i+1);
-	t.ppos = vec3.scale(div, i+1);
+	t.cpos = vec3.scale(sec, i+1);
+	t.ppos = vec3.scale(sec, i+1);
 	nlist.push(t);
 	tlist.push(t);
 }
@@ -554,9 +697,10 @@ var run = setInterval(function(){
 	ctx.fillRect(0, 0, dim[0], dim[1]);
 	
 	goVerlet(0.03);
+	updateGrid();
 	resolveNodeCollisions();
 	resolveConstraints();
-	updateNodePeers();
+	//updateNodePeers();
 	draw();
 	
 }, 16);
