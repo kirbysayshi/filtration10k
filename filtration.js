@@ -1,18 +1,5 @@
 (function(){
 
-var 
-	 cvs = document.getElementById("stage")
-	,dim = [ cvs.width, cvs.height, 1000 ] // dimensions: width, height of canvas
-	,ctx = cvs.getContext('2d')
-	,r = Math.random()
-	,max = (20 * r) + 5 // max num of nodes per game, minimum of 5
-	,rwm = 0 // max radius per row, for init
-	,nlist = [] // node list
-	,tlist = [] // tracker list
-	,grabbed = false // the currently clicked node
-	,grid = [] // grid[col][row]
-	,div = 50; // number of columns/rows in grid
-
 var vec3 = {
 	ignited: false
 	,setType: function(){
@@ -62,7 +49,20 @@ var vec3 = {
 	}
 };
 
-// r is a random between 0 and 1
+var 
+	 cvs = document.getElementById("stage")
+	,dim = [ cvs.width, cvs.height, 1000 ] // dimensions: width, height of canvas
+	,rayl = vec3.length(dim) * 2 // length of rays for collision tests
+	,ctx = cvs.getContext('2d')
+	,r = Math.random()
+	,max = (20 * r) + 5 // max num of nodes per game, minimum of 5
+	,rwm = 0 // max radius per row, for init
+	,nlist = [] // node list
+	,tlist = [] // tracker list
+	,grabbed = false // the currently clicked node
+	,grid = [] // grid[col][row]
+	,div = 50; // number of columns/rows in grid
+
 function Node(ist){
 	var r = Math.random();
 	this.ist = ist;//r > 0.9 ? true : false; // is source of infection
@@ -124,36 +124,68 @@ Node.prototype = {
 	,findPeers: function(nlist){
 		
 		var self = this
-			,i = 0 ,j = 0
-			,n;
+			,i = 0 ,j = 0, t = 0
+			,n
+			//,startRC = [ Math.floor(this.cpos[0] / dim), Math.floor(this.cpos[1] / dim) ]
+			,cols = grid.length
+			,rows = grid[0].length;
 		
 		// precompute distances
-		var dists = [];
-		for(i = 0; i < nlist.length; i++){
-			n = nlist[i];
-			dists[ n ] = vec3.length(vec3.sub(this.cpos, n.cpos));
-		}
-		
-		// sort nlist by distance from this
-		nlist.sort(function(a,b){
-			//var la = vec3.length(vec3.sub(self.cpos, a.cpos));
-			//var lb = vec3.length(vec3.sub(self.cpos, b.cpos));
-			if(dists[a] > dists[b]) { return 1; }
-			else if(dists[a] < dists[b]) { return -1; }
-			else if(dists[a] == dists[b]) { return 0; }
-		});
+		//var dists = [];
+		//for(i = 0; i < nlist.length; i++){
+		//	n = nlist[i];
+		//	dists[ n ] = vec3.length(vec3.sub(this.cpos, n.cpos));
+		//}
+		//
+		//// sort nlist by distance from this
+		//nlist.sort(function sortNList(a,b){
+		//	//var la = vec3.length(vec3.sub(self.cpos, a.cpos));
+		//	//var lb = vec3.length(vec3.sub(self.cpos, b.cpos));
+		//	if(dists[a] > dists[b]) { return 1; }
+		//	else if(dists[a] < dists[b]) { return -1; }
+		//	else if(dists[a] == dists[b]) { return 0; }
+		//});
 		
 		this.tto = [];
-		var inc = 0.174532925 * 5; // == 5 degree in rads
-		var rayCount = 72;
-		var l = 1280 * 2; // just to be doubly sure
+		var inc = 0.174532925 * 10; // == 5 degree in rads
+		var rayCount = 36;
+		//var l = vec3.length(dim) * 2; // just to be doubly sure
 		var p0 = this.cpos;
 		
 		ctx.strokeStyle = "#FF3399";
 		ctx.beginPath();
 		
 		for(i = 0; i < rayCount; i++){
-			var d = vec3.a( Math.cos(i*inc), Math.sin(i*inc), 0 ); // unit vector
+			var 
+				d = vec3.a( Math.cos(i*inc), Math.sin(i*inc), 0 ), // unit vector
+				candidates = [],
+				conv = 1 / div;
+			
+			//console.log(getGridLine(p0[0], p0[1], d[0]*rayl, d[1]*rayl));
+			//getGridLine(p0[0], p0[1], d[0]*rayl/2, d[1]*rayl/2);
+			
+			// find which cells along the ray we need 
+			//for(t = 0; t < rayl; t+=div/10){
+			//	var p = vec3.a(
+			//		p0[0] + (d[0]*t),
+			//		p0[1] + (d[1]*t),
+			//		p0[2] + (d[2]*t)
+			//	);
+			//	//var p = vec3.add(p0, vec3.scale(d, t));
+			//	var 
+			//		c = Math.floor( p[0] * conv ),
+			//		r = Math.floor( p[1] * conv );
+			//	//if( typeof(candidates[c]) === "undefined" ){
+			//	//	candidates[c] = [];
+			//	//	//candidates[c][r] = grid[c][r];
+			//	//} 
+			//	
+			//	if(c > 0 && c < cols && r > 0 && r < rows){
+			//		candidates[c] = [];
+			//		candidates[c][r] = grid[c][r];
+			//	}
+			//}
+			
 			
 			
 			
@@ -177,10 +209,10 @@ Node.prototype = {
 				var t = a - Math.sqrt( sqArg ); // the t value of the ray when the intersection occurs
 				if(t < 0) { continue; }
 				var colPoint = vec3.add(p0, vec3.scale(d, t));
-
+            
 				this.tto.push(n);
 				//this.ttoPoints.push( colPoint );
-
+            
 				ctx.moveTo(this.cpos[0], this.cpos[1]);
 				ctx.lineTo(colPoint[0], colPoint[1]);
 				
@@ -700,7 +732,7 @@ var run = setInterval(function(){
 	updateGrid();
 	resolveNodeCollisions();
 	resolveConstraints();
-	//updateNodePeers();
+	updateNodePeers();
 	draw();
 	
 }, 16);
