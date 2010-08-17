@@ -124,9 +124,12 @@ Node.prototype = {
 	,findPeers: function(nlist){
 		
 		var self = this
-			,i = 0 ,j = 0, t = 0
+			,i = 0 ,j = 0
 			,n
-			//,startRC = [ Math.floor(this.cpos[0] / dim), Math.floor(this.cpos[1] / dim) ]
+			,conv = 1 / div
+			,startCell = vec3.a( Math.floor(this.cpos[0]*conv), Math.floor(this.cpos[1]*conv), 0)
+			,scXY = vec3.a( startCell[0]*div, startCell[1]*div, 0 )
+			,tMax = vec3.a(div - (this.cpos[0] % div), div - (this.cpos[1] % div), 0)
 			,cols = grid.length
 			,rows = grid[0].length;
 		
@@ -158,36 +161,37 @@ Node.prototype = {
 		for(i = 0; i < rayCount; i++){
 			var 
 				d = vec3.a( Math.cos(i*inc), Math.sin(i*inc), 0 ), // unit vector
-				candidates = [],
-				conv = 1 / div;
+				candidates = [],				
+				
+				tDelta = vec3.a( div / d[0], div / d[1], 0 ), // not sure about this one, maybe div * d[0] ?
+				step = vec3.a( d[0] > 0 ? 1 : -1, d[1] > 0 ? 1 : -1, 0 ),
+				lastCell = vec3.clone(startCell),
+				currentCell = vec3.clone(startCell);
 			
-			//console.log(getGridLine(p0[0], p0[1], d[0]*rayl, d[1]*rayl));
-			//getGridLine(p0[0], p0[1], d[0]*rayl/2, d[1]*rayl/2);
+			// TODO: next, try removing all vec3, and using named vars instead
+			// TODO: before that, try putting a local ref to dim for the while loop
 			
-			// find which cells along the ray we need 
-			//for(t = 0; t < rayl; t+=div/10){
-			//	var p = vec3.a(
-			//		p0[0] + (d[0]*t),
-			//		p0[1] + (d[1]*t),
-			//		p0[2] + (d[2]*t)
-			//	);
-			//	//var p = vec3.add(p0, vec3.scale(d, t));
-			//	var 
-			//		c = Math.floor( p[0] * conv ),
-			//		r = Math.floor( p[1] * conv );
-			//	//if( typeof(candidates[c]) === "undefined" ){
-			//	//	candidates[c] = [];
-			//	//	//candidates[c][r] = grid[c][r];
-			//	//} 
+			//do { 
+			//	if(tMax[0] < tMax[1]) {		
+			//		tMax[0] = tMax[0] + tDelta[0];
+			//		scXY[0] = scXY[0] + step[0]; 
+			//	} else {
+			//		tMax[1] = tMax[1] + tDelta[1]; 
+			//		scXY[1] = scXY[1] + step[1];
+			//	} 
+			//	currentCell[0] = Math.floor(scXY[0]*conv);
+			//	currentCell[1] = Math.floor(scXY[1]*conv);
 			//	
-			//	if(c > 0 && c < cols && r > 0 && r < rows){
-			//		candidates[c] = [];
-			//		candidates[c][r] = grid[c][r];
+			//	if((currentCell[0] != lastCell[0] || currentCell[1] != lastCell[1])
+			//	&& currentCell[0] > 0 && currentCell[0] < cols
+			//	&& currentCell[1] > 0 && currentCell[1] < rows ){
+			//		candidates = candidates.concat( grid[ currentCell[0] ][ currentCell[1] ] );
+			//		lastCell[0] = currentCell[0];
+			//		lastCell[1] = currentCell[1];
 			//	}
-			//}
-			
-			
-			
+			//	
+			//} while( scXY[0] > 0 && scXY[0] < dim[0] &&
+			//	scXY[1] > 0 && scXY[1] < dim[1] );
 			
 			for(j = 0; j < nlist.length; j++){
 				//if( 
@@ -497,9 +501,9 @@ function updateGrid(){
 	grid = []; // blank it out
 	
 	// init grid arrays
-	for(i = 0; i < cols; i++){
+	for(i = 0; i <= cols; i++){
 		grid[i] = [];
-		for(j = 0; j < rows; j++){
+		for(j = 0; j <= rows; j++){
 			grid[i][j] = [];
 		}
 	}
