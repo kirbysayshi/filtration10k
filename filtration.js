@@ -121,138 +121,6 @@ Node.prototype = {
 		var d = vec3.length( vec3.sub(this.cpos, bnode.cpos) );
 		return d + brad;
 	}
-	,findPeers: function(nlist){
-		
-		var self = this
-			,i = 0 ,j = 0
-			,n
-			,conv = 1 / div
-			,startCell = vec3.a( Math.floor(this.cpos[0]*conv), Math.floor(this.cpos[1]*conv), 0)
-			,scXY = vec3.a( startCell[0]*div, startCell[1]*div, 0 )
-			,tMax = vec3.a(div - (this.cpos[0] % div), div - (this.cpos[1] % div), 0)
-			,cols = grid.length
-			,rows = grid[0].length;
-		
-		// precompute distances
-		//var dists = [];
-		//for(i = 0; i < nlist.length; i++){
-		//	n = nlist[i];
-		//	dists[ n ] = vec3.length(vec3.sub(this.cpos, n.cpos));
-		//}
-		//
-		//// sort nlist by distance from this
-		//nlist.sort(function sortNList(a,b){
-		//	//var la = vec3.length(vec3.sub(self.cpos, a.cpos));
-		//	//var lb = vec3.length(vec3.sub(self.cpos, b.cpos));
-		//	if(dists[a] > dists[b]) { return 1; }
-		//	else if(dists[a] < dists[b]) { return -1; }
-		//	else if(dists[a] == dists[b]) { return 0; }
-		//});
-		
-		this.tto = [];
-		var inc = 0.174532925 * 10; // == 5 degree in rads
-		var rayCount = 36;
-		//var l = vec3.length(dim) * 2; // just to be doubly sure
-		var p0 = this.cpos;
-		
-		ctx.strokeStyle = "#FF3399";
-		ctx.beginPath();
-		
-		for(i = 0; i < rayCount; i++){
-			var 
-				d = vec3.a( Math.cos(i*inc), Math.sin(i*inc), 0 ), // unit vector
-				candidates = [],				
-				
-				tDelta = vec3.a( div / d[0], div / d[1], 0 ), // not sure about this one, maybe div * d[0] ?
-				step = vec3.a( d[0] > 0 ? 1 : -1, d[1] > 0 ? 1 : -1, 0 ),
-				lastCell = vec3.clone(startCell),
-				currentCell = vec3.clone(startCell);
-			
-			// TODO: next, try removing all vec3, and using named vars instead
-			// TODO: before that, try putting a local ref to dim for the while loop
-			
-			//do { 
-			//	if(tMax[0] < tMax[1]) {		
-			//		tMax[0] = tMax[0] + tDelta[0];
-			//		scXY[0] = scXY[0] + step[0]; 
-			//	} else {
-			//		tMax[1] = tMax[1] + tDelta[1]; 
-			//		scXY[1] = scXY[1] + step[1];
-			//	} 
-			//	currentCell[0] = Math.floor(scXY[0]*conv);
-			//	currentCell[1] = Math.floor(scXY[1]*conv);
-			//	
-			//	if((currentCell[0] != lastCell[0] || currentCell[1] != lastCell[1])
-			//	&& currentCell[0] > 0 && currentCell[0] < cols
-			//	&& currentCell[1] > 0 && currentCell[1] < rows ){
-			//		candidates = candidates.concat( grid[ currentCell[0] ][ currentCell[1] ] );
-			//		lastCell[0] = currentCell[0];
-			//		lastCell[1] = currentCell[1];
-			//	}
-			//	
-			//} while( scXY[0] > 0 && scXY[0] < dim[0] &&
-			//	scXY[1] > 0 && scXY[1] < dim[1] );
-			
-			for(j = 0; j < nlist.length; j++){
-				//if( 
-				//	(function(){ 
-				//		for(var i = 0; i < n.cto.length; i++){ 
-				//			if(n.cto[i] === n) { return true; } 
-				//		} 
-				//		return false; 
-				//	})() ) {
-				//		continue;
-				//	}
-				
-				n = nlist[j];
-				if(this === n) { continue; } // don't test with self
-				var e = vec3.sub( n.cpos, this.cpos );
-				var a = vec3.dot(e, d);
-				var sqArg = (n.rad*n.rad) - vec3.dot(e, e) + (a*a);
-				if(sqArg < 0) { continue; } // the ray and sphere do not intersect
-				var t = a - Math.sqrt( sqArg ); // the t value of the ray when the intersection occurs
-				if(t < 0) { continue; }
-				var colPoint = vec3.add(p0, vec3.scale(d, t));
-            
-				this.tto.push(n);
-				//this.ttoPoints.push( colPoint );
-            
-				ctx.moveTo(this.cpos[0], this.cpos[1]);
-				ctx.lineTo(colPoint[0], colPoint[1]);
-				
-				// if we get this far, stop using this ray
-				break;
-			}
-			
-		}
-		
-		ctx.stroke();
-		
-		//for(i = 0; i < nlist.length; i++){
-		//	var n = nlist[i];
-		//	
-		//}
-		
-		// remove dups from tto
-		var unique = [];
-		for(i = 0; i < this.tto.length; i++){
-			var found = false;
-			for(j = 0; j < unique.length; j++){
-				if( this.tto[i] == unique[j] ){
-					found = true;
-				}
-			}
-			if(found === false){
-				unique.push(this.tto[i]);
-			}
-		}
-		
-		this.tto = unique;
-		
-		if(this.ttoPoints.length > 10){
-			this.ttoPoints = this.ttoPoints.slice(10);
-		}
-	}
 
 };
 
@@ -486,12 +354,6 @@ function goVerlet(dt){
 	}
 }
 
-function updateNodePeers(){
-	for(var i = 0; i < nlist.length; i++){
-		nlist[i].findPeers(nlist);
-	}
-}
-
 function updateGrid(){
 	var 
 		rows = Math.floor(dim[1] / div)
@@ -535,86 +397,71 @@ function updateGrid(){
 		if( L !== col && T !== row && L < cols && T < rows && L >= 0 && T >= 0 ){ grid[L][T].push(n); }
 		if( L !== col && B !== row && L < cols && B < rows && L >= 0 && B >= 0 ){ grid[L][B].push(n); }
 	}
+}
+
+function updateNodePeers(){
+	var 
+		 pairs = []
+		,found = false
+		,totalChecks = 0
+		,clear = true;
 	
-	//function Bresenham(x0, x1, y0, y1,col){
-	//		var steep = Math.abs(y1 - y0) > Math.abs(x1 - x0)
-	//	 if (steep){
-	//	   // swap
-	//	   var tmp=x0;x0=y0;y0=tmp
-	//	   tmp=x1;x1=y1;y1=tmp
-	//	 }
-	//	 if (x0 > x1){
-	//	   // swap
-	//	   var tmp=x0;x0=x1;x1=tmp;
-	//	   tmp=y0;y0=y1;y1=tmp;
-	//	  }
-    //
-	//	 var deltax = x1 - x0
-	//	 var deltay = Math.abs(y1 - y0)
-	//	 var error = 0
-	//	 var ystep
-	//	 var y = y0
-	//	 if (y0<y1) ystep = 1; else ystep = -1
-	//	 for (x=x0;x<=x1;x++){
-	//	   if (steep) plot(y,x,col); else plot(x,y,col)
-	//	   error = error + deltay
-	//	   if (2*error >= deltax){
-	//	     y = y + ystep
-	//	     error = error - deltax
-	//	   }
-	//	 }
-	//	}
-}
-
-function getGridLine(start, dir, length){
-	var startCol = Math.floor( start[0] / div );
-	var startRow = Math.floor( start[1] / div );
+	for(var i = 0; i < nlist.length; i++){
+		var n = nlist[i];
+		n.tto = [];
+		
+		for(var j = 0; j < nlist.length; j++){
+			var o = nlist[j];
+			if( n === o ){ continue; } // don't test against self
+			for(var k = 0; k < pairs.length; k++){
+				var p = pairs[k];
+				if( (p[0] === o && p[1] === n) || (p[0] === n && p[1] === o) ){
+					found = true;
+				}
+			}
+			if(found === true){
+				found = false;
+				continue; // we must have already tested this pair
+			}
+			
+			// we have a pair we haven't tested yet
+			// draw a ray, test every node but these two for intersection
+			
+			// add pair to list to prevent double checks
+			pairs.push([n, o]);
+			
+			clear = true;
+			var d = vec3.sub( o.cpos, n.cpos );
+			var len = vec3.length(d);
+			
+			// normalize d
+			d = vec3.scale(d, 1/len);
+			
+			for(var l = 0; l < nlist.length; l++){
+				var q = nlist[l];
+				if( n === q || o === q ){ continue; } // don't test against selves
+				
+				var e = vec3.sub( q.cpos, n.cpos );
+				var a = vec3.dot(e, d);
+				if(a < 0) { continue; } // ray points away from the sphere
+				var sqArg = (q.rad*q.rad) - vec3.dot(e, e) + (a*a);
+				totalChecks++;
+				if(sqArg < 0) { continue; } // the ray and sphere do not intersect
+				else { 
+					clear = false;
+					break; // stop looping, since the line of sight is blocked
+				}
+			}
+			if(clear === true){
+				n.tto.push(o);
+			}
+		}
+	}
 	
+	//console.log(totalChecks);
 }
 
-function getGridLine(x1, y1, x2, y2){
-	var cells = [];
-    var dx = x2 - x1; var sx = 1;
-    var dy = y2 - y1; var sy = 1;
 
-    if (dx < 0) {
-        sx = -1;
-        dx = -dx;
-    }
-    if (dy < 0) {
-        sy = -1;
-        dy = -dy;
-    }
-
-    dx = dx << 1;
-    dy = dy << 1;
-    cells.push([x1, y1]);
-	var fraction = 0;
-    if (dy < dx) {    
-        fraction = dy - (dx>>1);
-        while (x1 != x2){
-            if (fraction >= 0) {
-                y1 += sy;
-                fraction -= dx;
-            }
-            fraction += dy;
-            x1 += sx;
-            cells.push([x1, y1]);
-        }
-    } else {
-        fraction = dx - (dy>>1);        
-        while (y1 != y2) {
-            if (fraction >= 0) {
-                x1 += sx;
-                fraction -= dy;
-            }
-            fraction += dx;
-            y1 += sy;
-            cells.push([x1, y1]);
-        }    
-    }
-	return cells;
-}
 
 /////////////////////////////////////
 // Init
