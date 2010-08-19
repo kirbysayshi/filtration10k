@@ -258,7 +258,7 @@ function resolveConstraints(){
 }
 
 function resolveNodeCollisions(){
-	var friction = 0.5;
+	var friction = 1;
 	for(var i = 0; i < nlist.length; i++){
 		var n1 = nlist[i];
 	
@@ -290,14 +290,14 @@ function resolveNodeCollisions(){
 			
 			n2.cpos = vec3.sub(n2.cpos, 
 				vec3.scale(colVec, distance * n2.invMass));
-			n1.cpos = vec3.add(n1.cpos,
+			n1.cpos = vec3.add(n1.cpos,                  
 				vec3.scale(colVec, distance * n1.invMass));
 			
 			//I'm not sure if this actually works, but it seems like it
-			n2.ppos = vec3.sub(n2.ppos, 
-				vec3.scale(colVec, distance * n2.invMass * (friction)));
-			n1.ppos = vec3.add(n1.ppos,                     
-				vec3.scale(colVec, distance * n1.invMass * (friction)));
+			//n2.ppos = vec3.sub(n2.ppos, 
+			//	vec3.scale(colVec, distance * n2.invMass * (friction)));
+			//n1.ppos = vec3.add(n1.ppos,                     
+			//	vec3.scale(colVec, distance * n1.invMass * (friction)));
 			
 			var V0 = vec3.sub(n1.cpos, n1.ppos);
 			var V1 = vec3.sub(n2.cpos, n2.ppos);
@@ -341,15 +341,28 @@ function goVerlet(dt){
 		// add gravity temporarily
 		n1.acl = vec3.add(n1.acl, vec3.a(0, 0, -100));
 	
+		// save this for after integration
 		var temp = vec3.clone(n1.cpos);
-		n1.cpos = vec3.add(
-			vec3.add(
-				vec3.sub(n1.cpos, n1.ppos),
-				vec3.scale(n1.acl, dt*dt)
-			), n1.cpos);
 		
-		n1.ppos = temp;
+		// compute velocity
+		// add scaled acceleration based on delta time to get new velocity
+		var vel = vec3.add(
+			vec3.sub(n1.cpos, n1.ppos),
+			vec3.scale(n1.acl, dt*dt)
+		);
+		
+		// add new velocity to current position
+		n1.cpos = vec3.add( vel, n1.cpos );
+		
+		// FRICTION!!!!
+		// 0.001 is good for slowing movement
+		// 0.1 is like jello :)
+		// add scaled new velocity to previous position
+		n1.ppos = vec3.add( vec3.scale(vel, 0.001), temp );
+		
+		// reset acceleration
 		n1.acl = vec3.a(0,0,0);
+		
 		checkBounds(n1);
 	}
 }
