@@ -59,6 +59,7 @@ var
 	,rwm = 0 // max radius per row, for init
 	,nlist = [] // node list
 	,tlist = [] // tracker list
+	,plist = [] // packet list
 	,grabbed = false // the currently clicked node
 	,grid = [] // grid[col][row]
 	,div = 50; // number of columns/rows in grid
@@ -78,7 +79,7 @@ function Node(ist){
 	this.dnes = 50; // how dirty the node is 
 	this.cnes = 50; // how clean the node is 
 	this.tto = []; // transmitting to
-	this.ttoPoints = []; // points where the rays intersect
+	this.lej = this.rad; // last eject time
 }
 
 Node.prototype = {
@@ -86,7 +87,70 @@ Node.prototype = {
 		return;
 	}
 	,emitPackets: function(){
+		if(this.tto.length === 0){ return false; }
+		
 		// emit packets based on bandwidth... maybe new var
+		this.lej++;
+		if(this.lej >= 35*2){ // 35 is max node radius
+			this.lej = this.rad; // reset, more bandwidth == more ejections
+			
+			// order tto by bandwidth, transmit... smallest first?
+			// number of packets == rad / 2 ?
+			
+			this.tto.sort(function(a,b){
+				return a.rad - b.rad;
+			});
+			
+			var limit = Math.floor(this.rad / 2)
+				,interval = Math.PI*2 / limit
+				,length = this.tto.length;
+			for(var k = 0; k < limit; k++){
+				var target;
+				// loop back onto the array until we create the max packets
+				var diff = k - length;
+				var ratio = k / length;
+				if(ratio < 1){
+					// native bounds of array
+					target = this.tto[k];
+				} else {
+					target = this.tto[ k - (Math.floor(ratio) * length) ];
+				}
+				//if(k > length - 1){
+				//	target = this.tto[ Math.round((k - length) - (k / length - 1)) ];
+				//} else {
+				//	target = this.tto[k];
+				//}
+				
+				// eject a packet containing a ratio of dirty/clean that mirrors the node's state, rounded up
+				var p = new Packet(this, target, 
+					Math.ceil(this.dnes/this.cnes), // how dirty
+					Math.ceil(this.cnes/this.dnes)); // how clean
+				
+				// give packet initial accel outward from node
+				p.acl[0] = Math.cos(interval*k) * 1000;
+				p.acl[1] = Math.sin(interval*k) * 1000;
+				p.acl[2] = 0;
+				
+				var toRad = vec3.a(
+					 Math.cos(interval*k) * this.rad
+					,Math.sin(interval*k) * this.rad
+					,0);
+				
+				p.cpos = vec3.add( 
+					p.cpos
+					,toRad);
+				
+				p.ppos = vec3.add( 
+					p.ppos
+					,toRad);
+				
+				// TODO: should packets be transmitted, instead of targeting peers,
+				// just a giant initial burst of speed, then gravity of individual
+				// nodes pulls them back? This would favor the outer nodes...
+					
+				plist.push(p);
+			}
+		}
 	}
 	,aabb: function(){
 		var t = this;
@@ -124,11 +188,13 @@ Node.prototype = {
 
 };
 
-function Packet(snode, tnode, dnes){
+function Packet(snode, tnode, dnes, cnes){
 	this.rad = 2;
 	this.dnes = dnes;
-	this.ppos = [];
-	this.cpos = [];
+	this.cnes = cnes;
+	this.ppos = vec3.clone(snode.ppos);
+	this.cpos = vec3.clone(snode.cpos);
+	this.acl = vec3.clone(snode.acl);
 	this.snode = snode; // the source node, so it does not go towards source 
 	this.tnode = tnode; // the target node, HOMING MISSILE ACTION!
 }
@@ -204,14 +270,14 @@ function draw(){
 		ctx.stroke();
 		
 		// draw points of ray intersection	
-		for(var j = 0; j < n.ttoPoints.length; j++){
-			if(n.ist === true) { ctx.fillStyle = "#3399FF"; }
-			else { ctx.fillStyle = "#CC00CC"; }
-			var p = n.ttoPoints[j];
-			ctx.beginPath();
-			ctx.arc(p[0], p[1], 2, 0, Math.PI*2, false);
-			ctx.fill();
-		}
+		//for(var j = 0; j < n.ttoPoints.length; j++){
+		//	if(n.ist === true) { ctx.fillStyle = "#3399FF"; }
+		//	else { ctx.fillStyle = "#CC00CC"; }
+		//	var p = n.ttoPoints[j];
+		//	ctx.beginPath();
+		//	ctx.arc(p[0], p[1], 2, 0, Math.PI*2, false);
+		//	ctx.fill();
+		//}
 	}
 	
 	// draw grid where nodes reside
@@ -228,6 +294,18 @@ function draw(){
 		}
 	}
 	
+	// draw packets!
+	ctx.fillStyle = "#3399FF";
+	ctx.lineWidth = 0;
+	for(var p = 0; p < plist.length; p++){
+		var pk = plist[p];
+		ctx.beginPath();
+		ctx.arc(pk.cpos[0], pk.cpos[1], pk.rad * (1 - (pk.cpos[2] / dim[2])), 0, Math.PI*2, false);
+		ctx.fill();
+	}	
+	ctx.lineWidth = 1;
+	
+	
 	ctx.fillStyle = "#FFFFFF";
 	ctx.fillText( MM(60)[0], 100, 20 );
 	//console.log(MM(60)[0]);
@@ -240,7 +318,7 @@ function resolveConstraints(){
 		for(var j = 0; j < t.cto.length; j++){
 			var n = t.cto[j];
 			if(n.ist === true) { continue; }
-			var restLength = n.ist ? (n.res + (n.rad + t.rad)) * 2 : ((n.rad + t.rad)) * 4;
+			var restLength = n.ist ? (n.res + (n.rad + t.rad)) * 2 : (n.res + (n.rad + t.rad)) * 1.5;
 			var restLength2 = restLength*restLength;
 			var invMass = n.invMass + t.invMass;
 			if( invMass < 0.00001 ) { continue; }
@@ -258,7 +336,7 @@ function resolveConstraints(){
 }
 
 function resolveNodeCollisions(){
-	var friction = 1;
+	var friction = 0.5;
 	for(var i = 0; i < nlist.length; i++){
 		var n1 = nlist[i];
 	
@@ -333,9 +411,10 @@ function checkBounds(node){
 	node.ppos[2] = 0; // uncomment this to disable 3D
 }
 
-function goVerlet(dt){
+function goNodeVerlet(dt){
 	for(var i = 0; i < nlist.length; i++){
 		var n1 = nlist[i];
+		n1.emitPackets();
 		if(n1.ist) { continue; } // trackers are fixed...
 	
 		// add gravity temporarily
@@ -358,7 +437,11 @@ function goVerlet(dt){
 		// 0.001 is good for slowing movement
 		// 0.1 is like jello :)
 		// add scaled new velocity to previous position
-		n1.ppos = vec3.add( vec3.scale(vel, 0.001), temp );
+		n1.ppos = vec3.add( vec3.scale(vel, 0.1), temp );
+		
+		// TODO: possibly add 0.1 friction, with check to see if velocities are 
+		// over a certain threshold. if they are under, stop computing peer
+		// updating to save CPU.
 		
 		// reset acceleration
 		n1.acl = vec3.a(0,0,0);
@@ -428,8 +511,13 @@ function updateNodePeers(){
 			if( n === o ){ continue; } // don't test against self
 			for(var k = 0; k < pairs.length; k++){
 				var p = pairs[k];
-				if( (p[0] === o && p[1] === n) || (p[0] === n && p[1] === o) ){
+				if((p[0] === n && p[1] === o) || (p[0] === o && p[1] === n)){
+					// also add to tto if [2] is true
 					found = true;
+				}
+				
+				if( p[0] === o && p[1] === n && p[2] === true ) {
+					n.tto.push(o);
 				}
 			}
 			if(found === true){
@@ -441,7 +529,7 @@ function updateNodePeers(){
 			// draw a ray, test every node but these two for intersection
 			
 			// add pair to list to prevent double checks
-			pairs.push([n, o]);
+			//pairs.push([n, o]);
 			
 			clear = true;
 			var d = vec3.sub( o.cpos, n.cpos );
@@ -459,22 +547,71 @@ function updateNodePeers(){
 				if(a < 0) { continue; } // ray points away from the sphere
 				var sqArg = (q.rad*q.rad) - vec3.dot(e, e) + (a*a);
 				totalChecks++;
-				if(sqArg < 0) { continue; } // the ray and sphere do not intersect
+				if(sqArg < 0) { // the ray and sphere do not intersect
+					continue; 
+				} 
 				else { 
 					clear = false;
 					break; // stop looping, since the line of sight is blocked
 				}
 			}
 			if(clear === true){
+				// TODO: make the node references mutual
+				// check both arrays for dupes?
 				n.tto.push(o);
+				o.tto.push(n);
+				
+				// add pair to list to prevent double checks
+				pairs.push([n, o, true]); // node, node, hasLineOfSight?
+			} else {
+				// add pair to list to prevent double checks
+				pairs.push([n, o, false]); // node, node, hasLineOfSight?
 			}
 		}
 	}
 	
 	//console.log(totalChecks);
+	
+	
 }
 
-
+function goPacketVerlet(dt){
+	for(var i = 0; i < plist.length; i++){
+		var p = plist[i];
+	
+		// attract packets to their targets
+		var d = vec3.scale(vec3.normalize(vec3.sub(p.tnode.cpos, p.cpos)), p.tnode.rad*100);
+		p.acl = vec3.add(p.acl, d);
+	
+		// save this for after integration
+		var temp = vec3.clone(p.cpos);
+		
+		// compute velocity
+		// add scaled acceleration based on delta time to get new velocity
+		var vel = vec3.add(
+			vec3.sub(p.cpos, p.ppos),
+			vec3.scale(p.acl, dt*dt)
+		);
+		
+		// add new velocity to current position
+		p.cpos = vec3.add( vel, p.cpos );
+		
+		// FRICTION!!!!
+		// 0.001 is good for slowing movement
+		// 0.1 is like jello :)
+		// add scaled new velocity to previous position
+		p.ppos = vec3.add( vec3.scale(vel, 0.1), temp );
+		
+		// TODO: possibly add 0.1 friction, with check to see if velocities are 
+		// over a certain threshold. if they are under, stop computing peer
+		// updating to save CPU.
+		
+		// reset acceleration
+		p.acl = vec3.a(0,0,0);
+		
+		checkBounds(p);
+	}
+}
 
 /////////////////////////////////////
 // Init
@@ -526,6 +663,7 @@ for (var i = 0; i < tlist.length; i++) {
 // run this so that bounding spheres are accurate
 resolveConstraints();
 resolveConstraints();
+goNodeVerlet(1);
 
 // update placement of trackers based on their nodes so all are onscreen
 for (var i = 0; i < tlist.length; i++) {
@@ -592,14 +730,15 @@ var run = setInterval(function(){
 	ctx.fillStyle = "#000000";
 	ctx.fillRect(0, 0, dim[0], dim[1]);
 	
-	goVerlet(0.03);
+	goNodeVerlet(0.03);
+	goPacketVerlet(0.03);
 	updateGrid();
 	resolveNodeCollisions();
 	resolveConstraints();
 	updateNodePeers();
 	draw();
 	
-}, 16);
+}, 33);
 
 document.addEventListener("keydown", function(e){ 
 	if(e.keyCode == 27) { 
