@@ -87,7 +87,8 @@ function Node(ist){
 	this.cnes = (99 * Math.random()) + 1; // initially how clean the node is, 1 to 100
 	//this.cnes = 50 - this.dnes; // how clean the node is 
 	this.tto = []; // transmitting to
-	this.nej = 0; // next ejection in... this.nej - this.rad
+	this.nej = 0; // next ejection in... this.eji - this.nej
+	this.eji = Math.max( (35 - this.rad) * 20, 200);
 	this.pstr = (99 * r) + 1; // strength of each packet ejected, 1 to 100, same percentage as rad
 }
 
@@ -100,7 +101,7 @@ Node.prototype = {
 		
 		// emit packets based on bandwidth... maybe new var
 		this.nej++;
-		if(this.nej >= Math.max( (35 - this.rad) * 20, 200)){ // 35 is max node radius, bigger nodes output more
+		if(this.nej >= this.eji){ // 35 is max node radius, bigger nodes output more
 			this.nej = 0;//this.rad; // reset, more bandwidth == more ejections
 			
 			// order tto by bandwidth, transmit... smallest first?
@@ -222,11 +223,15 @@ function draw(){
 		// draw nodes
 		ctx.fillStyle = frgba;
 		ctx.strokeStyle = "#CCCCCC";
-		ctx.lineWidth = Math.floor(n.pstr*n.pstr * 0.01);
+		
 		ctx.beginPath();
 		ctx.arc(n.cpos[0], n.cpos[1], n.rad * (1 - (n.cpos[2] / dim[2])), 0, Math.PI*2, false);
-		ctx.stroke();
 		ctx.fill();
+		
+		ctx.lineWidth = Math.floor(n.pstr*n.pstr * 0.001);
+		ctx.beginPath();
+		ctx.arc(n.cpos[0], n.cpos[1], n.rad * (1 - (n.cpos[2] / dim[2])), 0, Math.PI*2 * (n.nej/n.eji), false);
+		ctx.stroke();
 		ctx.lineWidth = 1;
 		
 		ctx.beginPath();
@@ -450,7 +455,7 @@ function goNodeVerlet(dt){
 		// 0.001 is good for slowing movement
 		// 0.1 is like jello :)
 		// add scaled new velocity to previous position
-		n1.ppos = vec3.add( vec3.scale(vel, 0.1), temp );
+		n1.ppos = vec3.add( vec3.scale(vel, 0.001), temp );
 		
 		// TODO: possibly add 0.1 friction, with check to see if velocities are 
 		// over a certain threshold. if they are under, stop computing peer
@@ -638,15 +643,13 @@ function resolveNodePacketCollisions(){
 		}
 		
 		// collision! add cnes value to node
-		if(p.cnes > 0){
-			t.cnes += (p.cnes * (1 - t.res));
-		} else {
-			t.cnes += (p.cnes * (1 - t.res));
-		}
+		t.cnes += (p.cnes * (1 - t.res));
 		
 		// keep cnes within limits...
 		t.cnes = t.cnes <= 0 ? 0 : t.cnes;
 		//t.cnes = t.cnes >= 100 ? 100 : t.cnes;
+		
+		t.acl = vec3.add(t.acl, vec3.sub(p.cpos, p.ppos));
 	}
 
 	plist = marks;
