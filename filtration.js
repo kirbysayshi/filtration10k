@@ -70,7 +70,7 @@ var
 	,grabbed = false // the currently clicked node
 	,grid = [] // grid[col][row]
 	,div = 50 // number of columns/rows in grid
-	,pool = 1000 // amount of clean packets in the player's pool
+	,pool = 100 // amount of clean packets in the player's pool
 	,debug = false;
 
 function Node(ist){
@@ -78,17 +78,17 @@ function Node(ist){
 	this.ist = ist;//r > 0.9 ? true : false; // is source of infection
 	this.rad = (30 * r) + 5; // radius/bandwidth/gravity, min of 5
 	this.rad2 = this.rad*this.rad;
-	this.res = this.ist ? 99 : (100 * r) + 10; // resistance to becoming clean, min of 10
+	this.res = Math.max(Math.random(), this.rad * 0.01); // resistance to becoming clean, min of 0, max of 1
 	this.ppos = vec3.a(0,0,0); // previous position
 	this.cpos = vec3.a(0,0,0); // current position
 	this.acl = vec3.a(0,0,0); // acceleration
-	// TODO: make a tracker's mass... massive
 	this.invMass = this.ist ? 1/9000 : 1/this.rad;
 	this.cto = []; // connected to
-	this.dnes = Math.round(50 * r); // how dirty the node is 
-	this.cnes = 50 - this.dnes; // how clean the node is 
+	this.cnes = (99 * Math.random()) + 1; // initially how clean the node is, 1 to 100
+	//this.cnes = 50 - this.dnes; // how clean the node is 
 	this.tto = []; // transmitting to
-	this.lej = this.rad; // last eject time
+	this.nej = 0; // next ejection in... this.nej - this.rad
+	this.pstr = (99 * r) + 1; // strength of each packet ejected, 1 to 100, same percentage as rad
 }
 
 Node.prototype = {
@@ -99,9 +99,9 @@ Node.prototype = {
 		if(this.tto.length === 0){ return false; }
 		
 		// emit packets based on bandwidth... maybe new var
-		this.lej++;
-		if(this.lej >= Math.max((35 - this.rad) * 30, 35)){ // 35 is max node radius
-			this.lej = this.rad; // reset, more bandwidth == more ejections
+		this.nej++;
+		if(this.nej >= Math.max( (35 - this.rad) * 20, 200)){ // 35 is max node radius, bigger nodes output more
+			this.nej = 0;//this.rad; // reset, more bandwidth == more ejections
 			
 			// order tto by bandwidth, transmit... smallest first?
 			// number of packets == rad / 2 ?
@@ -113,32 +113,13 @@ Node.prototype = {
 			var limit = Math.floor(this.rad / 2)
 				,interval = Math.PI*2 / limit
 				,length = this.tto.length
-				,dval = this.cnes <= 0 ? 0 : Math.ceil(this.dnes/this.cnes) // how dirty
-				,cval = this.dnes <= 0 ? 0 : Math.ceil(this.cnes/this.dnes); // how clean
+				,cval = this.cnes < 75 ? this.pstr * -1 : this.pstr; // how powerful the packet is
+				//,cval = this.dnes <= 0 ? 0 : Math.ceil(this.cnes/this.dnes); // how clean
 				
 			for(var k = 0; k < limit; k++){
 
-				
-				//cval = cval < dval ? 0 : cval;
-				//dval = dval < cval ? 0 : dval;
-
-				if(cval < dval){
-					cval = -5;
-					dval = 5;
-					
-				} else if(dval < cval) {
-					dval = -5;
-					cval = 5;
-					
-				}
-
-				this.dnes = this.dnes - dval >= 0 ? this.dnes - dval : 0;
-				this.cnes = this.cnes - cval >= 0 ? this.cnes - cval : 0;
-
-				if(dval <= 0 && cval <= 0){ continue; }
-
 				// eject a packet containing a ratio of dirty/clean that mirrors the node's state, rounded up
-				var p = new Packet(this, this.tto[k % length], dval, cval);
+				var p = new Packet(this, this.tto[k % length], cval);
 				
 				// give packet initial accel outward from node
 				p.acl[0] = Math.cos(interval*1) * 1000;
@@ -205,9 +186,9 @@ Node.prototype = {
 
 };
 
-function Packet(snode, tnode, dnes, cnes){
+function Packet(snode, tnode, cnes){
 	this.rad = 2;
-	this.dnes = dnes;
+	//this.dnes = dnes;
 	this.cnes = cnes;
 	this.ppos = vec3.clone(snode.ppos);
 	this.cpos = vec3.clone(snode.cpos);
@@ -229,8 +210,8 @@ function draw(){
 		n = nlist[i];
 		
 		var frgba = "rgba(" 
-			+ Math.round(n.dnes / 255 * 100) + "," 
-			+ Math.round(n.cnes / 255 * 100) + "," 
+			+ Math.round((100 - n.cnes) * 0.01 * 255) + "," 
+			+ Math.round(n.cnes * 0.01 * 255) + "," 
 			+ "0,1)";
 		
 		//ctx.shadowOffsetX = 0;
@@ -241,16 +222,24 @@ function draw(){
 		// draw nodes
 		ctx.fillStyle = frgba;
 		ctx.strokeStyle = "#CCCCCC";
-		ctx.lineWidth = 5;
+		ctx.lineWidth = Math.floor(n.pstr*n.pstr * 0.01);
 		ctx.beginPath();
 		ctx.arc(n.cpos[0], n.cpos[1], n.rad * (1 - (n.cpos[2] / dim[2])), 0, Math.PI*2, false);
 		ctx.stroke();
 		ctx.fill();
 		ctx.lineWidth = 1;
 		
+		ctx.beginPath();
+		ctx.arc(n.cpos[0], n.cpos[1], n.res * 100 * (1 - (n.cpos[2] / dim[2])), 0, Math.PI*2, false);
+		ctx.stroke();
+		
 		// draw dnes and cnes
 		ctx.fillStyle = "#FFFFFF";
-		ctx.fillText(n.cnes + "/" + n.dnes, n.cpos[0]+n.rad+5, n.cpos[1]+n.rad+5);
+		ctx.fillText(  round2dec(n.pstr), n.cpos[0]+n.rad+5, n.cpos[1]+n.rad+5);
+		ctx.save();
+		ctx.font = "bold 14px arial";
+		ctx.fillText(  Math.floor(n.cnes), n.cpos[0] - 7, n.cpos[1] + 4);
+		ctx.restore();
 		
 		// draw constraints
 		//if(n.cto.length > 0){
@@ -342,7 +331,7 @@ function resolveConstraints(){
 		for(var j = 0; j < t.cto.length; j++){
 			var n = t.cto[j];
 			if(n.ist === true) { continue; }
-			var restLength = n.ist ? (n.res + (n.rad + t.rad)) * 2 : (n.res + (n.rad + t.rad)) * 1.5;
+			var restLength = (n.rad + t.rad) * 5 + (50 * n.res);
 			var restLength2 = restLength*restLength;
 			var invMass = n.invMass + t.invMass;
 			if( invMass < 0.00001 ) { continue; }
@@ -461,7 +450,7 @@ function goNodeVerlet(dt){
 		// 0.001 is good for slowing movement
 		// 0.1 is like jello :)
 		// add scaled new velocity to previous position
-		n1.ppos = vec3.add( vec3.scale(vel, 0.01), temp );
+		n1.ppos = vec3.add( vec3.scale(vel, 0.1), temp );
 		
 		// TODO: possibly add 0.1 friction, with check to see if velocities are 
 		// over a certain threshold. if they are under, stop computing peer
@@ -633,7 +622,7 @@ function goPacketVerlet(dt){
 }
 
 function resolveNodePacketCollisions(){
-	// we need 
+	// packets that haven't hit their targets yet
 	var marks = [];
 	
 	for(var i = 0; i < plist.length; i++){
@@ -648,25 +637,30 @@ function resolveNodePacketCollisions(){
 			continue;
 		}
 		
-		// collision! add dnes and cnes to node
-		t.dnes += p.dnes;
-		t.cnes += p.cnes;
+		// collision! add cnes value to node
+		if(p.cnes > 0){
+			t.cnes += (p.cnes * (1 - t.res));
+		} else {
+			t.cnes += (p.cnes * (1 - t.res));
+		}
 		
-		t.dnes = t.dnes <= 0 ? 0 : t.dnes;
+		// keep cnes within limits...
 		t.cnes = t.cnes <= 0 ? 0 : t.cnes;
+		//t.cnes = t.cnes >= 100 ? 100 : t.cnes;
 	}
-	
-	//if(marks.length > 0){
-	//	plist.remove.apply(plist, marks);
-	//}
+
 	plist = marks;
 }
 
 function reinforceCleanness(){
-	if(grabbed !== false && pool >= 5){
-		grabbed.cnes += 5;
-		pool -= 5;
+	if(grabbed !== false && pool >= 1){
+		grabbed.cnes += 100;
+		pool -= 1;
 	}
+}
+
+function round2dec(n){
+	return Math.round(n*100+((n*1000)%10>4?1:0))/100;
 }
 
 /////////////////////////////////////
@@ -765,6 +759,7 @@ cvs.addEventListener("mousedown", function(e){
 }, false);
 
 cvs.addEventListener("mouseup", function(e){
+	reinforceCleanness();
 	grabbed = false;
 }, false);
 
@@ -793,7 +788,7 @@ var run = setInterval(function(){
 	resolveConstraints();
 	resolveNodePacketCollisions();
 	updateNodePeers();
-	reinforceCleanness();
+	//reinforceCleanness();
 	draw();
 	
 }, 33);
