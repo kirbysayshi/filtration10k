@@ -1,5 +1,12 @@
 (function(){
 
+// Array Remove - By John Resig (MIT Licensed)
+Array.prototype.remove = function(from, to) {
+	var rest = this.slice((to || from) + 1 || this.length);
+	this.length = from < 0 ? this.length + from : from;
+	return this.push.apply(this, rest);
+};
+
 var vec3 = {
 	ignited: false
 	,setType: function(){
@@ -55,14 +62,16 @@ var
 	,rayl = vec3.length(dim) * 2 // length of rays for collision tests
 	,ctx = cvs.getContext('2d')
 	,r = Math.random()
-	,max = (20 * r) + 5 // max num of nodes per game, minimum of 5
+	,max = (10 * r) + 5 // max num of nodes per game, minimum of 5
 	,rwm = 0 // max radius per row, for init
 	,nlist = [] // node list
 	,tlist = [] // tracker list
 	,plist = [] // packet list
 	,grabbed = false // the currently clicked node
 	,grid = [] // grid[col][row]
-	,div = 50; // number of columns/rows in grid
+	,div = 50 // number of columns/rows in grid
+	,pool = 1000 // amount of clean packets in the player's pool
+	,debug = false;
 
 function Node(ist){
 	var r = Math.random();
@@ -76,8 +85,8 @@ function Node(ist){
 	// TODO: make a tracker's mass... massive
 	this.invMass = this.ist ? 1/9000 : 1/this.rad;
 	this.cto = []; // connected to
-	this.dnes = 50; // how dirty the node is 
-	this.cnes = 50; // how clean the node is 
+	this.dnes = Math.round(50 * r); // how dirty the node is 
+	this.cnes = 50 - this.dnes; // how clean the node is 
 	this.tto = []; // transmitting to
 	this.lej = this.rad; // last eject time
 }
@@ -91,7 +100,7 @@ Node.prototype = {
 		
 		// emit packets based on bandwidth... maybe new var
 		this.lej++;
-		if(this.lej >= 35*2){ // 35 is max node radius
+		if(this.lej >= Math.max((35 - this.rad) * 30, 35)){ // 35 is max node radius
 			this.lej = this.rad; // reset, more bandwidth == more ejections
 			
 			// order tto by bandwidth, transmit... smallest first?
@@ -103,46 +112,54 @@ Node.prototype = {
 			
 			var limit = Math.floor(this.rad / 2)
 				,interval = Math.PI*2 / limit
-				,length = this.tto.length;
-			for(var k = 0; k < limit; k++){
-				var target;
-				// loop back onto the array until we create the max packets
-				var diff = k - length;
-				var ratio = k / length;
-				if(ratio < 1){
-					// native bounds of array
-					target = this.tto[k];
-				} else {
-					target = this.tto[ k - (Math.floor(ratio) * length) ];
-				}
-				//if(k > length - 1){
-				//	target = this.tto[ Math.round((k - length) - (k / length - 1)) ];
-				//} else {
-				//	target = this.tto[k];
-				//}
+				,length = this.tto.length
+				,dval = this.cnes <= 0 ? 0 : Math.ceil(this.dnes/this.cnes) // how dirty
+				,cval = this.dnes <= 0 ? 0 : Math.ceil(this.cnes/this.dnes); // how clean
 				
+			for(var k = 0; k < limit; k++){
+
+				
+				//cval = cval < dval ? 0 : cval;
+				//dval = dval < cval ? 0 : dval;
+
+				if(cval < dval){
+					cval = -5;
+					dval = 5;
+					
+				} else if(dval < cval) {
+					dval = -5;
+					cval = 5;
+					
+				}
+
+				this.dnes = this.dnes - dval >= 0 ? this.dnes - dval : 0;
+				this.cnes = this.cnes - cval >= 0 ? this.cnes - cval : 0;
+
+				if(dval <= 0 && cval <= 0){ continue; }
+
 				// eject a packet containing a ratio of dirty/clean that mirrors the node's state, rounded up
-				var p = new Packet(this, target, 
-					Math.ceil(this.dnes/this.cnes), // how dirty
-					Math.ceil(this.cnes/this.dnes)); // how clean
+				var p = new Packet(this, this.tto[k % length], dval, cval);
 				
 				// give packet initial accel outward from node
-				p.acl[0] = Math.cos(interval*k) * 1000;
-				p.acl[1] = Math.sin(interval*k) * 1000;
+				p.acl[0] = Math.cos(interval*1) * 1000;
+				p.acl[1] = Math.sin(interval*1) * 1000;
 				p.acl[2] = 0;
 				
-				var toRad = vec3.a(
-					 Math.cos(interval*k) * this.rad
-					,Math.sin(interval*k) * this.rad
-					,0);
+				//this.dnes = this.dnes - dval > 0 ? this.dnes - dval: 0;
+				//this.cnes = this.cnes - cval > 0 ? this.cnes - cval: 0;
 				
-				p.cpos = vec3.add( 
-					p.cpos
-					,toRad);
-				
-				p.ppos = vec3.add( 
-					p.ppos
-					,toRad);
+				//var toRad = vec3.a(
+				//	 Math.cos(interval*k) * this.rad
+				//	,Math.sin(interval*k) * this.rad
+				//	,0);
+				//
+				//p.cpos = vec3.add( 
+				//	p.cpos
+				//	,toRad);
+				//
+				//p.ppos = vec3.add( 
+				//	p.ppos
+				//	,toRad);
 				
 				// TODO: should packets be transmitted, instead of targeting peers,
 				// just a giant initial burst of speed, then gravity of individual
@@ -211,9 +228,10 @@ function draw(){
 	for(var i = 0; i < nlist.length; i++){
 		n = nlist[i];
 		
-		var frgba = "rgba(" + Math.floor(n.dnes * 255) 
-			+ "," + (n.ist ? 255 : 0) 
-			+ ",0,1)";
+		var frgba = "rgba(" 
+			+ Math.round(n.dnes / 255 * 100) + "," 
+			+ Math.round(n.cnes / 255 * 100) + "," 
+			+ "0,1)";
 		
 		//ctx.shadowOffsetX = 0;
 		//ctx.shadowOffsetY = 0;
@@ -258,16 +276,18 @@ function draw(){
 		//	ctx.stroke();
 		//}
 		
-		// draw transmit to node lines
-		ctx.strokeStyle = "#339900";
-		ctx.beginPath();
-		for(var k = 0; k < n.tto.length; k++){
-			var t = n.tto[k];
-			//if(t.ist == false) { continue; }
-			ctx.moveTo(n.cpos[0], n.cpos[1]);
-			ctx.lineTo(t.cpos[0], t.cpos[1]);
+		if(debug === true){
+			// draw transmit to node lines
+			ctx.strokeStyle = "#339900";
+			ctx.beginPath();
+			for(var k = 0; k < n.tto.length; k++){
+				var t = n.tto[k];
+				//if(t.ist == false) { continue; }
+				ctx.moveTo(n.cpos[0], n.cpos[1]);
+				ctx.lineTo(t.cpos[0], t.cpos[1]);
+			}
+			ctx.stroke();
 		}
-		ctx.stroke();
 		
 		// draw points of ray intersection	
 		//for(var j = 0; j < n.ttoPoints.length; j++){
@@ -280,17 +300,19 @@ function draw(){
 		//}
 	}
 	
-	// draw grid where nodes reside
-	for(var c = 0; c < grid.length; c++){
-		var col = grid[c];
-		for(var r = 0; r < col.length; r++){
-			var cell = col[r];
+	if(debug === true){
+		// draw grid where nodes reside
+		for(var c = 0; c < grid.length; c++){
+			var col = grid[c];
+			for(var r = 0; r < col.length; r++){
+				var cell = col[r];
 			
-			for(var h = 0; h < cell.length; h++){
-				ctx.strokeStyle = "#CCCCCC";
-				ctx.strokeRect(c*div, r*div, div, div);
+				for(var h = 0; h < cell.length; h++){
+					ctx.strokeStyle = "#CCCCCC";
+					ctx.strokeRect(c*div, r*div, div, div);
+				}
+			
 			}
-			
 		}
 	}
 	
@@ -308,6 +330,8 @@ function draw(){
 	
 	ctx.fillStyle = "#FFFFFF";
 	ctx.fillText( MM(60)[0], 100, 20 );
+	
+	ctx.fillText( "Reinforcements Remaining: " + pool, dim[0] - 200, dim[1] - 10);
 	//console.log(MM(60)[0]);
 }
 
@@ -437,7 +461,7 @@ function goNodeVerlet(dt){
 		// 0.001 is good for slowing movement
 		// 0.1 is like jello :)
 		// add scaled new velocity to previous position
-		n1.ppos = vec3.add( vec3.scale(vel, 0.1), temp );
+		n1.ppos = vec3.add( vec3.scale(vel, 0.01), temp );
 		
 		// TODO: possibly add 0.1 friction, with check to see if velocities are 
 		// over a certain threshold. if they are under, stop computing peer
@@ -528,9 +552,6 @@ function updateNodePeers(){
 			// we have a pair we haven't tested yet
 			// draw a ray, test every node but these two for intersection
 			
-			// add pair to list to prevent double checks
-			//pairs.push([n, o]);
-			
 			clear = true;
 			var d = vec3.sub( o.cpos, n.cpos );
 			var len = vec3.length(d);
@@ -559,7 +580,7 @@ function updateNodePeers(){
 				// TODO: make the node references mutual
 				// check both arrays for dupes?
 				n.tto.push(o);
-				o.tto.push(n);
+				//o.tto.push(n);
 				
 				// add pair to list to prevent double checks
 				pairs.push([n, o, true]); // node, node, hasLineOfSight?
@@ -571,8 +592,6 @@ function updateNodePeers(){
 	}
 	
 	//console.log(totalChecks);
-	
-	
 }
 
 function goPacketVerlet(dt){
@@ -610,6 +629,43 @@ function goPacketVerlet(dt){
 		p.acl = vec3.a(0,0,0);
 		
 		checkBounds(p);
+	}
+}
+
+function resolveNodePacketCollisions(){
+	// we need 
+	var marks = [];
+	
+	for(var i = 0; i < plist.length; i++){
+		var p = plist[i];
+		var t = p.tnode;
+	
+		var pton = vec3.sub(p.cpos, t.cpos);
+		var dpton = vec3.dot(pton, pton);
+		if( dpton >= (p.rad+t.rad)*(p.rad+t.rad) ){
+			// no collision
+			marks.push(p);
+			continue;
+		}
+		
+		// collision! add dnes and cnes to node
+		t.dnes += p.dnes;
+		t.cnes += p.cnes;
+		
+		t.dnes = t.dnes <= 0 ? 0 : t.dnes;
+		t.cnes = t.cnes <= 0 ? 0 : t.cnes;
+	}
+	
+	//if(marks.length > 0){
+	//	plist.remove.apply(plist, marks);
+	//}
+	plist = marks;
+}
+
+function reinforceCleanness(){
+	if(grabbed !== false && pool >= 5){
+		grabbed.cnes += 5;
+		pool -= 5;
 	}
 }
 
@@ -735,7 +791,9 @@ var run = setInterval(function(){
 	updateGrid();
 	resolveNodeCollisions();
 	resolveConstraints();
+	resolveNodePacketCollisions();
 	updateNodePeers();
+	reinforceCleanness();
 	draw();
 	
 }, 33);
@@ -745,6 +803,15 @@ document.addEventListener("keydown", function(e){
 		clearInterval(run); 
 		console.log("execution stopped"); 
 	} 
+	if(e.keyCode == 68){
+		debug = true;
+	}
+}, false);
+
+document.addEventListener("keyup", function(e){ 
+	if(e.keyCode == 68){
+		debug = false;
+	}
 }, false);
 
 })();
