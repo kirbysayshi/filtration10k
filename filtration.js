@@ -219,18 +219,6 @@ function draw(){
 		ctx.stroke();
 		ctx.restore();
 		
-		// draw cnes value
-		ctx.save();
-		ctx.fillStyle = "#000000";
-		ctx.font = "bold " + MF(14*camr) + "px arial";
-		var cnesw = ctx.measureText(cnes);
-		ctx.fillText(  
-			cnes
-			,cpos[0] - (cnesw.width/2)
-			,cpos[1] + 4*camr
-		);
-		ctx.restore();
-		
 	}
 	
 	// draw packets!
@@ -772,7 +760,7 @@ var
 	,ctx = cvs.getContext('2d')
 	,R = Math.random // shortcut
 	,r = R()
-	,max = (30 * r) + 5 // max num of nodes per random game, minimum of 5
+	,max = (25 * r) + 5 // max num of nodes per random game, minimum of 5
 	,nlist = [] // node list
 	,tlist = [] // tracker list
 	,plist = [] // packet list
