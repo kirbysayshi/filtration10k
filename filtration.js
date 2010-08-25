@@ -1,12 +1,5 @@
 (function(){
 
-// Array Remove - By John Resig (MIT Licensed)
-Array.prototype.remove = function(from, to) {
-	var rest = this.slice((to || from) + 1 || this.length);
-	this.length = from < 0 ? this.length + from : from;
-	return this.push.apply(this, rest);
-};
-
 var vec3 = {
 	ignited: false
 	,setType: function(){
@@ -76,7 +69,7 @@ var
 function Node(ist){
 	var r = Math.random();
 	this.ist = ist;//r > 0.9 ? true : false; // is source of infection
-	this.rad = (30 * r) + 5; // radius/bandwidth/gravity, min of 5
+	this.rad = (30 * r) + 15; // radius/bandwidth/gravity, min of 5
 	this.rad2 = this.rad*this.rad;
 	this.res = Math.max(Math.random(), this.rad * 0.01); // resistance to becoming clean, min of 0, max of 1
 	this.ppos = vec3.a(0,0,0); // previous position
@@ -87,8 +80,8 @@ function Node(ist){
 	this.cnes = (99 * Math.random()) + 1; // initially how clean the node is, 1 to 100
 	//this.cnes = 50 - this.dnes; // how clean the node is 
 	this.tto = []; // transmitting to
-	this.nej = 0; // next ejection in... this.eji - this.nej
 	this.eji = Math.max( (35 - this.rad) * 20, 200);
+	this.nej = Math.random() * this.eji; // next ejection in... this.eji - this.nej
 	this.pstr = (99 * r) + 1; // strength of each packet ejected, 1 to 100, same percentage as rad
 }
 
@@ -130,18 +123,18 @@ Node.prototype = {
 				//this.dnes = this.dnes - dval > 0 ? this.dnes - dval: 0;
 				//this.cnes = this.cnes - cval > 0 ? this.cnes - cval: 0;
 				
-				//var toRad = vec3.a(
-				//	 Math.cos(interval*k) * this.rad
-				//	,Math.sin(interval*k) * this.rad
-				//	,0);
-				//
-				//p.cpos = vec3.add( 
-				//	p.cpos
-				//	,toRad);
-				//
-				//p.ppos = vec3.add( 
-				//	p.ppos
-				//	,toRad);
+				var toRad = vec3.a(
+					 Math.cos(interval*k) * this.rad
+					,Math.sin(interval*k) * this.rad
+					,0);
+				
+				p.cpos = vec3.add( 
+					p.cpos
+					,toRad);
+				
+				p.ppos = vec3.add( 
+					p.ppos
+					,toRad);
 				
 				// TODO: should packets be transmitted, instead of targeting peers,
 				// just a giant initial burst of speed, then gravity of individual
@@ -222,26 +215,32 @@ function draw(){
 		
 		// draw nodes
 		ctx.fillStyle = frgba;
-		ctx.strokeStyle = "#CCCCCC";
-		
 		ctx.beginPath();
 		ctx.arc(n.cpos[0], n.cpos[1], n.rad * (1 - (n.cpos[2] / dim[2])), 0, Math.PI*2, false);
 		ctx.fill();
 		
-		ctx.lineWidth = Math.floor(n.pstr*n.pstr * 0.001);
+		// draw power stroke
+		ctx.save();		
+		ctx.strokeStyle = "rgba(204,204,204,0.4)";
+		ctx.lineWidth = Math.max(Math.floor(n.pstr*n.pstr * 0.005), 4);
 		ctx.beginPath();
 		ctx.arc(n.cpos[0], n.cpos[1], n.rad * (1 - (n.cpos[2] / dim[2])), 0, Math.PI*2 * (n.nej/n.eji), false);
 		ctx.stroke();
-		ctx.lineWidth = 1;
+		ctx.restore();
 		
+		// draw resistance
+		ctx.save();
+		ctx.strokeStyle = "#CCCCCC";
 		ctx.beginPath();
 		ctx.arc(n.cpos[0], n.cpos[1], n.res * 100 * (1 - (n.cpos[2] / dim[2])), 0, Math.PI*2, false);
 		ctx.stroke();
+		ctx.restore();
 		
 		// draw dnes and cnes
-		ctx.fillStyle = "#FFFFFF";
-		ctx.fillText(  round2dec(n.pstr), n.cpos[0]+n.rad+5, n.cpos[1]+n.rad+5);
+		//ctx.fillStyle = "#FFFFFF";
+		//ctx.fillText(  round2dec(n.pstr), n.cpos[0]+n.rad+5, n.cpos[1]+n.rad+5);
 		ctx.save();
+		ctx.fillStyle = "#FFFFFF";
 		ctx.font = "bold 14px arial";
 		ctx.fillText(  Math.floor(n.cnes), n.cpos[0] - 7, n.cpos[1] + 4);
 		ctx.restore();
@@ -336,7 +335,7 @@ function resolveConstraints(){
 		for(var j = 0; j < t.cto.length; j++){
 			var n = t.cto[j];
 			if(n.ist === true) { continue; }
-			var restLength = (n.rad + t.rad) * 5 + (50 * n.res);
+			var restLength = (n.rad + t.rad) * 2 + (50 * n.res);
 			var restLength2 = restLength*restLength;
 			var invMass = n.invMass + t.invMass;
 			if( invMass < 0.00001 ) { continue; }
@@ -354,7 +353,7 @@ function resolveConstraints(){
 }
 
 function resolveNodeCollisions(){
-	var friction = 0.5;
+	var friction = 1;
 	for(var i = 0; i < nlist.length; i++){
 		var n1 = nlist[i];
 	
@@ -370,15 +369,13 @@ function resolveNodeCollisions(){
 				continue;
 			}
 		
-			//console.log("collision");
-			if(n1 == grabbed || n2 == grabbed){
-				console.log(grabbed);
-			}
+			//if(n1 == grabbed || n2 == grabbed){
+			//	console.log(grabbed);
+			//}
 			
 			var invMass = n1.invMass + n2.invMass;
 			var distance = Math.sqrt(dotCol);
 			
-			//colVec = vec3.normalize(colVec);
 			// manually normalize, since we already have the distance
 			colVec[0] /= distance;
 			colVec[1] /= distance;
@@ -388,12 +385,6 @@ function resolveNodeCollisions(){
 				vec3.scale(colVec, distance * n2.invMass));
 			n1.cpos = vec3.add(n1.cpos,                  
 				vec3.scale(colVec, distance * n1.invMass));
-			
-			//I'm not sure if this actually works, but it seems like it
-			//n2.ppos = vec3.sub(n2.ppos, 
-			//	vec3.scale(colVec, distance * n2.invMass * (friction)));
-			//n1.ppos = vec3.add(n1.ppos,                     
-			//	vec3.scale(colVec, distance * n1.invMass * (friction)));
 			
 			var V0 = vec3.sub(n1.cpos, n1.ppos);
 			var V1 = vec3.sub(n2.cpos, n2.ppos);
@@ -425,6 +416,36 @@ function checkBounds(node){
 	//node.ppos[1] = Math.max( 0 + node.rad, Math.min(node.ppos[1], dim[1] - node.rad) );
 	//node.ppos[2] = Math.max( 0 + node.rad, Math.min(node.ppos[2], dim[2] - node.rad) );
 	
+	// Right edge test
+	var V0 = vec3.a(dim[0], 0, 0);
+	var V1 = vec3.a(dim[0], dim[1], 0);
+	var E = vec3.sub(V1, V0);
+	var normal = vec3.a( -E[1], E[0], E[2] );
+	normal = vec3.normalize(normal);
+	var D = vec3.sub(node.cpos, V0);
+	var de = vec3.dot(D, E);
+	if(de < 0){
+		// collide vertex V0 with node
+		
+		return;
+	}
+	
+	var e2 = vec3.dot(E, E);
+	if(de > e2){
+		// collide vertex V1 with node
+		return;
+	}
+	
+	var t = de / e2;
+	var u = 1 - t;
+	var Pseg = vec3.add(V0, vec3.scale(E, t));
+	var Nseg = vec3.add(vec3.scale(normal, u), vec3.scale(normal, t));
+	
+	Nseg = vec3.normalize(Nseg);
+	
+	var Vseg = new Vertex(Pseg, Nseg);
+	return Vseg.collide(node);
+	
 	node.cpos[2] = 0; // uncomment this to disable 3D
 	node.ppos[2] = 0; // uncomment this to disable 3D
 }
@@ -455,7 +476,7 @@ function goNodeVerlet(dt){
 		// 0.001 is good for slowing movement
 		// 0.1 is like jello :)
 		// add scaled new velocity to previous position
-		n1.ppos = vec3.add( vec3.scale(vel, 0.001), temp );
+		n1.ppos = vec3.add( vec3.scale(vel, 0.1), temp );
 		
 		// TODO: possibly add 0.1 friction, with check to see if velocities are 
 		// over a certain threshold. if they are under, stop computing peer
@@ -762,12 +783,14 @@ cvs.addEventListener("mousedown", function(e){
 }, false);
 
 cvs.addEventListener("mouseup", function(e){
-	reinforceCleanness();
+	if(e.shiftKey) {
+		reinforceCleanness();
+	}
 	grabbed = false;
 }, false);
 
 cvs.addEventListener("mousemove", function(e){
-	if(grabbed !== false){
+	if(grabbed !== false && !e.shiftKey){
 		grabbed.cpos[0] = e.clientX;
 		grabbed.cpos[1] = e.clientY;
 		grabbed.cpos[2] = 0;
@@ -788,7 +811,7 @@ var run = setInterval(function(){
 	goPacketVerlet(0.03);
 	updateGrid();
 	resolveNodeCollisions();
-	resolveConstraints();
+	//resolveConstraints();
 	resolveNodePacketCollisions();
 	updateNodePeers();
 	//reinforceCleanness();
