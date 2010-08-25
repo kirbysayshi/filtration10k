@@ -1,5 +1,6 @@
 (function(){
-
+$(function(){
+	
 var vec3 = {
 	ignited: false
 	,setType: function(){
@@ -49,23 +50,6 @@ var vec3 = {
 	}
 };
 
-var 
-	 cvs = document.getElementById("stage")
-	,dim = [ cvs.width, cvs.height, 1000 ] // dimensions: width, height of canvas
-	,rayl = vec3.length(dim) * 2 // length of rays for collision tests
-	,ctx = cvs.getContext('2d')
-	,r = Math.random()
-	,max = (10 * r) + 5 // max num of nodes per game, minimum of 5
-	,rwm = 0 // max radius per row, for init
-	,nlist = [] // node list
-	,tlist = [] // tracker list
-	,plist = [] // packet list
-	,grabbed = false // the currently clicked node
-	,grid = [] // grid[col][row]
-	,div = 50 // number of columns/rows in grid
-	,pool = 100 // amount of clean packets in the player's pool
-	,debug = false;
-
 function Node(ist){
 	var r = Math.random();
 	this.ist = ist;//r > 0.9 ? true : false; // is source of infection
@@ -78,7 +62,7 @@ function Node(ist){
 	this.invMass = this.ist ? 1/9000 : 1/this.rad;
 	this.cto = []; // connected to
 	this.cnes = (99 * Math.random()) + 1; // initially how clean the node is, 1 to 100
-	//this.cnes = 50 - this.dnes; // how clean the node is 
+	
 	this.tto = []; // transmitting to
 	this.eji = Math.max( (35 - this.rad) * 20, 200);
 	this.nej = Math.random() * this.eji; // next ejection in... this.eji - this.nej
@@ -107,7 +91,7 @@ Node.prototype = {
 			var limit = Math.floor(this.rad / 2)
 				,interval = Math.PI*2 / limit
 				,length = this.tto.length
-				,cval = this.cnes < 75 ? this.pstr * -1 : this.pstr; // how powerful the packet is
+				,cval = this.cnes < cwin ? this.pstr * -1 : this.pstr; // how powerful the packet is
 				//,cval = this.dnes <= 0 ? 0 : Math.ceil(this.cnes/this.dnes); // how clean
 				
 			for(var k = 0; k < limit; k++){
@@ -199,14 +183,15 @@ function draw(){
 	//ctx.fillStyle = "#000000";
 	//ctx.fillRect(0, 0, dim[0], dim[1]);
 	
-	var n;
 	for(var i = 0; i < nlist.length; i++){
-		n = nlist[i];
+		var 
+			n = nlist[i]
+			,frgba = "rgba(" 
+				+ Math.round((100 - n.cnes) * 0.01 * 255) + "," 
+				+ Math.round(n.cnes * 0.01 * 255) + "," 
+				+ "0,1)"
+			,cpos = convertWorldPointToCanvas(n.cpos);
 		
-		var frgba = "rgba(" 
-			+ Math.round((100 - n.cnes) * 0.01 * 255) + "," 
-			+ Math.round(n.cnes * 0.01 * 255) + "," 
-			+ "0,1)";
 		
 		//ctx.shadowOffsetX = 0;
 		//ctx.shadowOffsetY = 0;
@@ -216,15 +201,23 @@ function draw(){
 		// draw nodes
 		ctx.fillStyle = frgba;
 		ctx.beginPath();
-		ctx.arc(n.cpos[0], n.cpos[1], n.rad * (1 - (n.cpos[2] / dim[2])), 0, Math.PI*2, false);
+		ctx.arc(
+			cpos[0]
+			,cpos[1]
+			,(n.rad * (1 - (n.cpos[2] / dim[2]))) * camr
+			,0, Math.PI*2, false);
 		ctx.fill();
 		
 		// draw power stroke
 		ctx.save();		
-		ctx.strokeStyle = "rgba(204,204,204,0.4)";
-		ctx.lineWidth = Math.max(Math.floor(n.pstr*n.pstr * 0.005), 4);
+		ctx.strokeStyle = "rgba(204,204,204,0.6)";
+		ctx.lineWidth = (Math.max(Math.floor(n.pstr*n.pstr * 0.005), 4)) * camr;
 		ctx.beginPath();
-		ctx.arc(n.cpos[0], n.cpos[1], n.rad * (1 - (n.cpos[2] / dim[2])), 0, Math.PI*2 * (n.nej/n.eji), false);
+		ctx.arc(
+			cpos[0]
+			,cpos[1]
+			,(n.rad * (1 - (n.cpos[2] / dim[2]))) * camr
+			,0, Math.PI*2 * (n.nej/n.eji), false);
 		ctx.stroke();
 		ctx.restore();
 		
@@ -232,7 +225,11 @@ function draw(){
 		ctx.save();
 		ctx.strokeStyle = "#CCCCCC";
 		ctx.beginPath();
-		ctx.arc(n.cpos[0], n.cpos[1], n.res * 100 * (1 - (n.cpos[2] / dim[2])), 0, Math.PI*2, false);
+		ctx.arc(
+			cpos[0]
+			,cpos[1]
+			,(n.res * 100 * (1 - (n.cpos[2] / dim[2]))) * camr
+			,0, Math.PI*2, false);
 		ctx.stroke();
 		ctx.restore();
 		
@@ -242,7 +239,11 @@ function draw(){
 		ctx.save();
 		ctx.fillStyle = "#FFFFFF";
 		ctx.font = "bold 14px arial";
-		ctx.fillText(  Math.floor(n.cnes), n.cpos[0] - 7, n.cpos[1] + 4);
+		ctx.fillText(  
+			Math.floor(n.cnes)
+			,cpos[0] - 7*camr
+			,cpos[1] + 4*camr
+		);
 		ctx.restore();
 		
 		// draw constraints
@@ -275,9 +276,10 @@ function draw(){
 			ctx.beginPath();
 			for(var k = 0; k < n.tto.length; k++){
 				var t = n.tto[k];
+				var tpos = convertWorldPointToCanvas(t.cpos);
 				//if(t.ist == false) { continue; }
-				ctx.moveTo(n.cpos[0], n.cpos[1]);
-				ctx.lineTo(t.cpos[0], t.cpos[1]);
+				ctx.moveTo(cpos[0], cpos[1]);
+				ctx.lineTo(tpos[0], tpos[1]);
 			}
 			ctx.stroke();
 		}
@@ -301,12 +303,29 @@ function draw(){
 				var cell = col[r];
 			
 				for(var h = 0; h < cell.length; h++){
+					var gpos = convertWorldPointToCanvas( vec3.a(c*div, r*div, 0) );
 					ctx.strokeStyle = "#CCCCCC";
-					ctx.strokeRect(c*div, r*div, div, div);
+					ctx.strokeRect( gpos[0], gpos[1], div, div);
 				}
 			
 			}
 		}
+		
+		// draw world aabb
+		var tl = convertWorldPointToCanvas(wbb.min);
+		var wh = vec3.scale(wdim, camr);
+		var br = convertWorldPointToCanvas(wbb.max);
+		ctx.save();
+		ctx.lineWidth = 1;
+		ctx.strokeStyle = "#CCCCCC";
+		ctx.strokeRect( tl[0], tl[1], wh[0], wh[1] )
+		ctx.beginPath();
+		ctx.arc(br[0], br[1], 10, 0, Math.PI*2, false);
+		ctx.fill();
+		ctx.beginPath();
+		ctx.arc(tl[0], tl[1], 10, 0, Math.PI*2, false);
+		ctx.fill();
+		ctx.restore();
 	}
 	
 	// draw packets!
@@ -314,17 +333,24 @@ function draw(){
 	ctx.lineWidth = 0;
 	for(var p = 0; p < plist.length; p++){
 		var pk = plist[p];
+		var pkpos = convertWorldPointToCanvas(pk.cpos);
 		ctx.beginPath();
-		ctx.arc(pk.cpos[0], pk.cpos[1], pk.rad * (1 - (pk.cpos[2] / dim[2])), 0, Math.PI*2, false);
+		ctx.arc(pkpos[0], pkpos[1]
+			,pk.rad * (1 - (pk.cpos[2] / dim[2])), 0, Math.PI*2, false);
 		ctx.fill();
 	}	
 	ctx.lineWidth = 1;
 	
-	
 	ctx.fillStyle = "#FFFFFF";
 	ctx.fillText( MM(60)[0], 100, 20 );
 	
-	ctx.fillText( "Reinforcements Remaining: " + pool, dim[0] - 200, dim[1] - 10);
+	ctx.fillText( "Reinforcements Remaining: " + pool, (dim[0] - 200), (dim[1] - 10));
+	
+	// draw the origin so we know where the f*** we are
+	var origin = convertWorldPointToCanvas(vec3.a(0,0,0));
+	ctx.beginPath();
+	ctx.arc( origin[0], origin[1], 10, 0, Math.PI*2, false );
+	ctx.fill();
 	//console.log(MM(60)[0]);
 }
 
@@ -416,36 +442,6 @@ function checkBounds(node){
 	//node.ppos[1] = Math.max( 0 + node.rad, Math.min(node.ppos[1], dim[1] - node.rad) );
 	//node.ppos[2] = Math.max( 0 + node.rad, Math.min(node.ppos[2], dim[2] - node.rad) );
 	
-	// Right edge test
-	var V0 = vec3.a(dim[0], 0, 0);
-	var V1 = vec3.a(dim[0], dim[1], 0);
-	var E = vec3.sub(V1, V0);
-	var normal = vec3.a( -E[1], E[0], E[2] );
-	normal = vec3.normalize(normal);
-	var D = vec3.sub(node.cpos, V0);
-	var de = vec3.dot(D, E);
-	if(de < 0){
-		// collide vertex V0 with node
-		
-		return;
-	}
-	
-	var e2 = vec3.dot(E, E);
-	if(de > e2){
-		// collide vertex V1 with node
-		return;
-	}
-	
-	var t = de / e2;
-	var u = 1 - t;
-	var Pseg = vec3.add(V0, vec3.scale(E, t));
-	var Nseg = vec3.add(vec3.scale(normal, u), vec3.scale(normal, t));
-	
-	Nseg = vec3.normalize(Nseg);
-	
-	var Vseg = new Vertex(Pseg, Nseg);
-	return Vseg.collide(node);
-	
 	node.cpos[2] = 0; // uncomment this to disable 3D
 	node.ppos[2] = 0; // uncomment this to disable 3D
 }
@@ -457,7 +453,7 @@ function goNodeVerlet(dt){
 		if(n1.ist) { continue; } // trackers are fixed...
 	
 		// add gravity temporarily
-		n1.acl = vec3.add(n1.acl, vec3.a(0, 0, -100));
+		//n1.acl = vec3.add(n1.acl, vec3.a(0, 0, -100));
 	
 		// save this for after integration
 		var temp = vec3.clone(n1.cpos);
@@ -476,7 +472,7 @@ function goNodeVerlet(dt){
 		// 0.001 is good for slowing movement
 		// 0.1 is like jello :)
 		// add scaled new velocity to previous position
-		n1.ppos = vec3.add( vec3.scale(vel, 0.1), temp );
+		n1.ppos = vec3.add( vec3.scale(vel, 0.01), temp );
 		
 		// TODO: possibly add 0.1 friction, with check to see if velocities are 
 		// over a certain threshold. if they are under, stop computing peer
@@ -491,8 +487,8 @@ function goNodeVerlet(dt){
 
 function updateGrid(){
 	var 
-		rows = Math.floor(dim[1] / div)
-		,cols = Math.floor(dim[0] / div)
+		rows = Math.floor(wdim[1] / div)
+		,cols = Math.floor(wdim[0] / div)
 		,i = 0, j = 0;
 	
 	grid = []; // blank it out
@@ -670,7 +666,7 @@ function resolveNodePacketCollisions(){
 		t.cnes = t.cnes <= 0 ? 0 : t.cnes;
 		//t.cnes = t.cnes >= 100 ? 100 : t.cnes;
 		
-		t.acl = vec3.add(t.acl, vec3.sub(p.cpos, p.ppos));
+		//t.acl = vec3.add(t.acl, vec3.sub(p.cpos, p.ppos));
 	}
 
 	plist = marks;
@@ -687,12 +683,100 @@ function round2dec(n){
 	return Math.round(n*100+((n*1000)%10>4?1:0))/100;
 }
 
+function resizeViewport(e){
+	dim = [$w.width(), $w.height(), 1000];
+	dimh = vec3.scale(dim, 0.5);
+	$cvs.attr({ 
+		width: dim[0], 
+		height: dim[1]
+	});
+}
+
+function computeCameraRatio(){
+	// get extremes
+	var min = vec3.a(9e1000, 9e1000, 0);
+	var max = vec3.a(-9e1000, -9e1000, 0)
+	for(var i = 0; i < nlist.length; i++){
+		var n = nlist[i];
+		// min xy
+		if(n.cpos[0] - (n.rad*2) < min[0]) min[0] = n.cpos[0] - (n.rad*2);
+		if(n.cpos[1] - (n.rad*2) < min[1]) min[1] = n.cpos[1] - (n.rad*2);
+		
+		// max xy
+		if(n.cpos[0] + n.rad*2 > max[0]) max[0] = n.cpos[0] + (n.rad*2);
+		if(n.cpos[1] + n.rad*2 > max[1]) max[1] = n.cpos[1] + (n.rad*2);
+	}
+	// set world bounding box
+	wbb.min = min;
+	wbb.max = max;
+	wdim = vec3.sub(max, min); // convert to absolute dimensions
+	woff = vec3.scale(vec3.add(max, min), 0.5); // midpoint
+	
+	// viewport / world
+	camr = Math.abs(Math.min( dim[0] / wdim[0], dim[1] / wdim[1]));
+}
+
+function convertWorldPointToCanvas(v3){
+	return vec3.a(
+		((v3[0] - woff[0]) * camr) + dimh[0],
+		((v3[1] - woff[1]) * camr) + dimh[1],
+		0//((v3[2] - woff[2]) * camr) + dimh[2]
+	);
+}
+
+function convertCanvasPointToWorld(v3){
+	return vec3.a(
+		(v3[0] / camr) + woff[0] - (dimh[0] / camr),
+		(v3[1] / camr) + woff[1] - (dimh[1] / camr),
+		0//(v3[2] / camr) + woff[2] - (dimh[2] / camr) 
+	);
+}
+
+function checkForWin(){
+	var green = true;
+	for(var i = 0; i < nlist.length; i++){		
+		if(nlist[i].cnes < cwin){
+			green = false;
+		}
+	}
+	if(green === true){
+		// do something about winning!
+		console.log("WIN!");
+	}
+}
+
 /////////////////////////////////////
 // Init
 /////////////////////////////////////
 
 
+var 
+	 cvs = document.getElementById("stage")
+	,$cvs = $(cvs)
+	,$w = $(window)
+	,dim = [ $w.width(), $w.height(), 1000 ] // dimensions: width, height of canvas
+	//,dimh = vec3.scale(dim, 0.5) // half dimensions of canvas
+	//,cam = { cpos: vec3.a(0,0,0), ppos: vec3.a(0,0,0) } // the "camera"!
+	,wbb = { min: [0,0,0], max: [0,0,0] } // effectively a bounding box for the world
+	,wdim = vec3.a(1,1,1) // the size of the world,
+	,woff = vec3.a(0,0,0) // the world offset, or the min value of wbb
+	,camr = 1 // "camera" ratio
+	,ctx = cvs.getContext('2d')
+	,r = Math.random()
+	,max = (10 * r) + 5 // max num of nodes per game, minimum of 5
+	,rwm = 0 // max radius per row, for init
+	,nlist = [] // node list
+	,tlist = [] // tracker list
+	,plist = [] // packet list
+	,grabbed = false // the currently clicked node
+	,grid = [] // grid[col][row]
+	,div = 50 // number of columns/rows in grid
+	,pool = 100 // amount of clean packets in the player's pool
+	,cwin = 75 // % * 100 that all nodes must be to win the round
+	,debug = false;
 
+// set width and height of canvas to match window
+resizeViewport();
 
 // create a few trackers
 var tMax = Math.floor(max / 4);
@@ -727,7 +811,7 @@ for (var i = 0; i < tlist.length; i++) {
 		t.cto.push(n);
 		n.cto.push(t);
 	}
-	
+
 	// connect the trackers in series
 	if(i !== 0){
 		t.cto.push( tlist[i-1] );
@@ -735,42 +819,26 @@ for (var i = 0; i < tlist.length; i++) {
 }
 
 // run this so that bounding spheres are accurate
-resolveConstraints();
-resolveConstraints();
-goNodeVerlet(1);
-
+//resolveConstraints();
+//resolveConstraints();
+//goNodeVerlet(1);
+//
 // update placement of trackers based on their nodes so all are onscreen
-for (var i = 0; i < tlist.length; i++) {
-	var t = tlist[i];
-	var r = t.bsRad();
-	t.cpos[0] = Math.max( 0 + r, Math.min(t.cpos[0], dim[0] - r) );
-	t.cpos[1] = Math.max( 0 + r, Math.min(t.cpos[1], dim[1] - r) );
-	//t.cpos[2] = Math.max( 0 + r, Math.min(t.cpos[2], dim[2] - r) );
-	                                                          
-	t.ppos[0] = Math.max( 0 + r, Math.min(t.ppos[0], dim[0] - r) );
-	t.ppos[1] = Math.max( 0 + r, Math.min(t.ppos[1], dim[1] - r) );
-	//t.ppos[2] = Math.max( 0 + r, Math.min(t.ppos[2], dim[2] - r) );
-}
-
-// make a few node-to-node connections
-//for(var i = tMax; i < nlist.length; i += tMax){
-//	var n = nlist[i];
-//	if(n.ist == true) continue;
-//	n.cto.push(nlist[i-tMax]);
+//for (var i = 0; i < tlist.length; i++) {
+//	var t = tlist[i];
+//	var r = t.bsRad();
+//	t.cpos[0] = Math.max( 0 + r, Math.min(t.cpos[0], dim[0] - r) );
+//	t.cpos[1] = Math.max( 0 + r, Math.min(t.cpos[1], dim[1] - r) );
+//	//t.cpos[2] = Math.max( 0 + r, Math.min(t.cpos[2], dim[2] - r) );
+//
+//	t.ppos[0] = Math.max( 0 + r, Math.min(t.ppos[0], dim[0] - r) );
+//	t.ppos[1] = Math.max( 0 + r, Math.min(t.ppos[1], dim[1] - r) );
+//	//t.ppos[2] = Math.max( 0 + r, Math.min(t.ppos[2], dim[2] - r) );
 //}
-
-//var n1 = new Node(false);
-//var n2 = new Node(false);
 //
-//n1.cpos = n1.ppos = vec3.a( 20, 20, 0 );
-//n2.cpos = n2.ppos = vec3.a( 160, 20, 0 );
-//
-//nlist.push(n1, n2); //, n3);
-
-
-cvs.addEventListener("mousedown", function(e){
-	var d = 999999999;
-	var mouse = vec3.a( e.clientX, e.clientY, 0 );
+$cvs.bind("mousedown", function(e){
+	var d = 9e200;
+	var mouse = convertCanvasPointToWorld( vec3.a(e.pageX, e.pageY, 0) );
 	console.log(e, mouse);
 	for(var i = 0; i < nlist.length; i++){
 		var delta = vec3.length(vec3.sub(mouse, nlist[i].cpos));
@@ -779,60 +847,61 @@ cvs.addEventListener("mousedown", function(e){
 			d = delta;
 		}
 	}
-	console.log(grabbed);
-}, false);
+	console.log(grabbed, convertWorldPointToCanvas(grabbed.cpos), camr);
+});
 
-cvs.addEventListener("mouseup", function(e){
+$cvs.bind("mouseup", function(e){
 	if(e.shiftKey) {
 		reinforceCleanness();
 	}
 	grabbed = false;
-}, false);
+});
 
-cvs.addEventListener("mousemove", function(e){
+$cvs.bind("mousemove", function(e){
 	if(grabbed !== false && !e.shiftKey){
-		grabbed.cpos[0] = e.clientX;
-		grabbed.cpos[1] = e.clientY;
-		grabbed.cpos[2] = 0;
-		
-		// kill movement
-		grabbed.ppos[0] = e.clientX;
-		grabbed.ppos[1] = e.clientY;
-		grabbed.ppos[2] = 0;
+		var mouse = convertCanvasPointToWorld( vec3.a(e.pageX, e.pageY, 0) );
+		grabbed.cpos = mouse;
+                               
+		// kill movement       
+		grabbed.ppos = mouse;
 	}
-}, false);
+});
 
 var run = setInterval(function(){
 	// temporary, for debug purposes
 	ctx.fillStyle = "#000000";
 	ctx.fillRect(0, 0, dim[0], dim[1]);
-	
+
 	goNodeVerlet(0.03);
 	goPacketVerlet(0.03);
-	updateGrid();
+	//updateGrid();
 	resolveNodeCollisions();
 	//resolveConstraints();
 	resolveNodePacketCollisions();
 	updateNodePeers();
-	//reinforceCleanness();
+	computeCameraRatio();
+	checkForWin();
 	draw();
-	
+
 }, 33);
 
-document.addEventListener("keydown", function(e){ 
+$(document).bind("keydown", function(e){ 
 	if(e.keyCode == 27) { 
 		clearInterval(run); 
-		console.log("execution stopped"); 
+		console.log("execution stopped", wbb); 
 	} 
 	if(e.keyCode == 68){
 		debug = true;
 	}
 }, false);
 
-document.addEventListener("keyup", function(e){ 
+$(document).bind("keyup", function(e){ 
 	if(e.keyCode == 68){
 		debug = false;
 	}
 }, false);
 
-})();
+$(window).bind('resize', resizeViewport);
+	
+}); // end of document.ready
+})(); // end of wrapper
