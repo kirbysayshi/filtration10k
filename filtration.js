@@ -773,6 +773,7 @@ var
 	,div = 50 // number of columns/rows in grid
 	,pool = 100 // amount of clean packets in the player's pool
 	,cwin = 75 // % * 100 that all nodes must be to win the round
+	,dbcl = +new Date() // last time a click was detected, for double click
 	,debug = false;
 
 // set width and height of canvas to match window
@@ -837,6 +838,7 @@ for (var i = 0; i < tlist.length; i++) {
 //}
 //
 $cvs.bind("mousedown", function(e){
+	var now = +new Date();
 	var d = 9e200;
 	var mouse = convertCanvasPointToWorld( vec3.a(e.pageX, e.pageY, 0) );
 	console.log(e, mouse);
@@ -848,12 +850,18 @@ $cvs.bind("mousedown", function(e){
 		}
 	}
 	console.log(grabbed, convertWorldPointToCanvas(grabbed.cpos), camr);
+	
+	// test for double click
+	if(dbcl && now - dbcl > 120 && now - dbcl < 300){
+		reinforceCleanness();
+		console.log("DOUBLE CLICK: CLEANESS REINFORCED!");
+	}
+	
+	dbcl = now;
+	console.log(dbcl);
 });
 
 $cvs.bind("mouseup", function(e){
-	if(e.shiftKey) {
-		reinforceCleanness();
-	}
 	grabbed = false;
 });
 
