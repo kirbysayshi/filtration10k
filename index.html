@@ -1,17 +1,45 @@
-<!DOCTYPE html>
-<html>
-	<head>
-		<meta http-equiv="Content-type" content="text/html; charset=utf-8">
-		<title>Infection</title>
-		<style type="text/css">
-			body { margin: 0; padding: 0; background-color: #FFFFFF; }
-			canvas { position: absolute; }
-		</style>
-	</head>
-	<body>
-		<canvas id="stage"></canvas>
-		<script src="jquery-1.4.2.min.js" type="text/javascript" charset="utf-8"></script>
-		<script src="modules/MM/MM.js" type="text/javascript" charset="utf-8"></script>
-		<script src="filtration.js" type="text/javascript" charset="utf-8"></script>		
-	</body>
+<!DOCTYPE html><html><head><title>Infection</title>
+<style type="text/css">
+	body { margin: 0; padding: 0; background-color: #000000; font-size: 10px; font-family: Helvetica, Arial, sans-serif; color: white;}
+	canvas { position: absolute; }
+	h1 { margin: 0; padding: 0; font-size: 100px; }
+	#start, #lvlstatus, #winstatus { width: 440px; position: relative; z-index: 1000; margin: 0px auto 0px auto; padding: 50px; }			
+	#lvlstatus { display: none; width: 600px; }
+	#winstatus { display: none; width: 600px; }
+	#hud { position: absolute; bottom: 0px; height: 40px; width: 100%; overflow: hidden; }
+	#msg { float: left; width: 40%; font-size: 16px; padding: 0px 0px 25px 0px; }
+	#boosts { float: right; width: 40%; font-size: 32px; padding: 0px 25px 0px 0px; text-align: right; }
+</style></head>
+<body>
+	<canvas id="stage"></canvas>
+	<div id="hud"><div id="msg"></div><div id="boosts"></div></div>
+	<div id="start">
+		<h1>Infection</h1>
+		<p>press spacebar or click to start</p>
+		<div id="instr">
+			<p>Cells: green is clean, red is infected. Over 75 means the cell will deploy antibodies. Under 75 will cause the cell to spread the virus.</p>
+			<p>Double click to boost a cell by 75.</p>
+			<p>Click and drag to move cells around: position matters!</p>
+			<p>Cells have three attributes:</p>
+			<ul>
+				<li>strength of the particles it ejects (the thickness of the charging ring)</li>
+				<li>resistance to other particles (the outer ring)</li>
+				<li>speed of particle ejection (the charging ring's arc)</li>
+			</ul>
+			<p>Your goal is to clear all cells of infection!</p>
+			<p>Hold spacebar to see who cells will transmit to.</p>
+		</div>
+	</div>	
+	<div id="lvlstatus">
+		<h1>TITLE TXT HERE</h1>
+		<p>SUBTITLE HERE</p>
+	</div>
+	<div id="winstatus">
+		<h1>WIN</h1>
+		<p>You purified the infection! Onto the next in 5 seconds...</p>
+	</div>
+	<script src="jquery-1.4.2.min.js" type="text/javascript" charset="utf-8"></script>
+	<script src="modules/MM/MM.js" type="text/javascript" charset="utf-8"></script>
+	<script src="filtration.js" type="text/javascript" charset="utf-8"></script>		
+</body>
 </html>

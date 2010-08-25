@@ -52,38 +52,41 @@ var vec3 = {
 
 function Node(ist){
 	var r = Math.random();
+	this.setRad((30 * r) + 15);
 	this.ist = ist;//r > 0.9 ? true : false; // is source of infection
-	this.rad = (30 * r) + 15; // radius/bandwidth/gravity, min of 5
-	this.rad2 = this.rad*this.rad;
-	this.res = Math.max(Math.random(), this.rad * 0.01); // resistance to becoming clean, min of 0, max of 1
 	this.ppos = vec3.a(0,0,0); // previous position
 	this.cpos = vec3.a(0,0,0); // current position
 	this.acl = vec3.a(0,0,0); // acceleration
-	this.invMass = this.ist ? 1/9000 : 1/this.rad;
 	this.cto = []; // connected to
 	this.cnes = (99 * Math.random()) + 1; // initially how clean the node is, 1 to 100
-	
 	this.tto = []; // transmitting to
-	this.eji = Math.max( (35 - this.rad) * 20, 200);
-	this.nej = Math.random() * this.eji; // next ejection in... this.eji - this.nej
 	this.pstr = (99 * r) + 1; // strength of each packet ejected, 1 to 100, same percentage as rad
 }
 
 Node.prototype = {
-	BB: function(){
-		return;
+	setPos: function(v){
+		this.cpos = v;
+		this.ppos = vec3.clone(v);
+	}
+	,setRad: function(rad){
+		this.rad = rad; // radius/bandwidth/gravity, min of 5
+		this.rad2 = this.rad*this.rad;
+		this.res = Math.max(Math.random(), this.rad * 0.01); // resistance to becoming clean, min of 0, max of 1
+		this.invMass = 1/this.rad;
+		this.eji = Math.max( (35 - this.rad) * 20, 200 );
+		this.nej = Math.random() * this.eji; // next ejection in... this.eji - this.nej
 	}
 	,emitPackets: function(){
-		if(this.tto.length === 0){ return false; }
 		
-		// emit packets based on bandwidth... maybe new var
 		this.nej++;
-		if(this.nej >= this.eji){ // 35 is max node radius, bigger nodes output more
+		
+		
+		if(this.nej >= this.eji){
 			this.nej = 0;//this.rad; // reset, more bandwidth == more ejections
+		
+			if(this.tto.length === 0){ return false; }
 			
-			// order tto by bandwidth, transmit... smallest first?
-			// number of packets == rad / 2 ?
-			
+			// sort... transmit to larger rads first
 			this.tto.sort(function(a,b){
 				return a.rad - b.rad;
 			});
@@ -91,8 +94,7 @@ Node.prototype = {
 			var limit = Math.floor(this.rad / 2)
 				,interval = Math.PI*2 / limit
 				,length = this.tto.length
-				,cval = this.cnes < cwin ? this.pstr * -1 : this.pstr; // how powerful the packet is
-				//,cval = this.dnes <= 0 ? 0 : Math.ceil(this.cnes/this.dnes); // how clean
+				,cval = Math.floor(this.cnes) < cwin ? this.pstr * -1 : this.pstr; // how powerful the packet is
 				
 			for(var k = 0; k < limit; k++){
 
@@ -104,8 +106,8 @@ Node.prototype = {
 				p.acl[1] = Math.sin(interval*1) * 1000;
 				p.acl[2] = 0;
 				
-				//this.dnes = this.dnes - dval > 0 ? this.dnes - dval: 0;
-				//this.cnes = this.cnes - cval > 0 ? this.cnes - cval: 0;
+				// give the node a little kick for ejecting...
+				this.acl = vec3.add(this.acl, vec3.scale(p.acl, -1*0.1));
 				
 				var toRad = vec3.a(
 					 Math.cos(interval*k) * this.rad
@@ -119,10 +121,6 @@ Node.prototype = {
 				p.ppos = vec3.add( 
 					p.ppos
 					,toRad);
-				
-				// TODO: should packets be transmitted, instead of targeting peers,
-				// just a giant initial burst of speed, then gravity of individual
-				// nodes pulls them back? This would favor the outer nodes...
 					
 				plist.push(p);
 			}
@@ -143,8 +141,6 @@ Node.prototype = {
 			min[1] = Math.min( min[1], n.cpos[1] );
 			min[2] = Math.min( min[2], n.cpos[2] );
 
-			// TODO: base this on the cpos + radius, and make it a sphere, not a box
-			// Could we just "know" based on the node with the largest radius?
 		}
 		return {min: min, max: max};
 	}
@@ -177,12 +173,54 @@ function Packet(snode, tnode, cnes){
 
 function draw(){
 	
-	// z-sorting!
+	// clear everything
+	ctx.fillStyle = "#000000";
+	ctx.fillRect(0, 0, dim[0], dim[1]);
+	
+	if(showsta === true){
+		ctx.globalAlpha = 0.1;
+	} else {
+		ctx.globalAlpha = ctx.globalAlpha < 1 ? ctx.globalAlpha + 0.01 : 1;
+	}
+	
+	if(debug === true){
+		
+		// draw world aabb
+		var tl = convertWorldPointToCanvas(wbb.min);
+		var wh = vec3.scale(wdim, camr);
+		var br = convertWorldPointToCanvas(wbb.max);
+		ctx.save();
+		ctx.lineWidth = 1;
+		ctx.strokeStyle = "#CCCCCC";
+		ctx.strokeRect( tl[0], tl[1], wh[0], wh[1] )
+		ctx.beginPath();
+		ctx.arc(br[0], br[1], 10, 0, Math.PI*2, false);
+		ctx.fill();
+		ctx.beginPath();
+		ctx.arc(tl[0], tl[1], 10, 0, Math.PI*2, false);
+		ctx.fill();
+		ctx.restore();
+		
+		// draw the origin so we know where the f*** we are
+		ctx.save();
+		ctx.fillStyle = "#FFFFFF";
+		var origin = convertWorldPointToCanvas(vec3.a(0,0,0));
+		ctx.beginPath();
+		ctx.arc( origin[0], origin[1], 5, 0, Math.PI*2, false );
+		ctx.fill();
+		ctx.restore();
+		
+		// FPS Meter
+		ctx.save();
+		ctx.fillStyle = "#FFFFFF";
+		ctx.fillText( MM(60)[0], 100, 20 );
+		ctx.restore();
+	}
+	
+	// z-sorting?!
 	nlist.sort(function(a,b){return a.cpos[2] - b.cpos[2];});
 	
-	//ctx.fillStyle = "#000000";
-	//ctx.fillRect(0, 0, dim[0], dim[1]);
-	
+	// draw everything node related...
 	for(var i = 0; i < nlist.length; i++){
 		var 
 			n = nlist[i]
@@ -190,15 +228,38 @@ function draw(){
 				+ Math.round((100 - n.cnes) * 0.01 * 255) + "," 
 				+ Math.round(n.cnes * 0.01 * 255) + "," 
 				+ "0,1)"
-			,cpos = convertWorldPointToCanvas(n.cpos);
+			,cpos = convertWorldPointToCanvas(n.cpos)
+			//,grad = ctx.createRadialGradient(
+			//	cpos[0], cpos[1], 10 * camr,
+			//	cpos[0], cpos[1], n.rad * camr)
+			,cnes = Math.floor(n.cnes);
 		
+		//grad.addColorStop(0, "#FFFFFF");
+		//grad.addColorStop(1, frgba);
 		
 		//ctx.shadowOffsetX = 0;
 		//ctx.shadowOffsetY = 0;
 		//ctx.shadowBlur = 10;
 		//ctx.shadowColor = "rgba(0," + Math.floor(n.dnes * 255) + ",0,1)";
 		
+		if(showtto === true){
+			// draw transmit to node lines
+			ctx.save();
+			ctx.strokeStyle = "rgba(51,153,0,0.5)";
+			ctx.beginPath();
+			for(var k = 0; k < n.tto.length; k++){
+				var t = n.tto[k];
+				var tpos = convertWorldPointToCanvas(t.cpos);
+				//if(t.ist == false) { continue; }
+				ctx.moveTo(cpos[0], cpos[1]);
+				ctx.lineTo(tpos[0], tpos[1]);
+			}
+			ctx.stroke();
+			ctx.restore();
+		}
+		
 		// draw nodes
+		ctx.save();
 		ctx.fillStyle = frgba;
 		ctx.beginPath();
 		ctx.arc(
@@ -207,6 +268,7 @@ function draw(){
 			,(n.rad * (1 - (n.cpos[2] / dim[2]))) * camr
 			,0, Math.PI*2, false);
 		ctx.fill();
+		ctx.restore();
 		
 		// draw power stroke
 		ctx.save();		
@@ -233,99 +295,18 @@ function draw(){
 		ctx.stroke();
 		ctx.restore();
 		
-		// draw dnes and cnes
-		//ctx.fillStyle = "#FFFFFF";
-		//ctx.fillText(  round2dec(n.pstr), n.cpos[0]+n.rad+5, n.cpos[1]+n.rad+5);
+		// draw cnes value
 		ctx.save();
-		ctx.fillStyle = "#FFFFFF";
-		ctx.font = "bold 14px arial";
+		ctx.fillStyle = "#000000";
+		ctx.font = "bold " + Math.floor(14*camr) + "px arial";
+		var cnesw = ctx.measureText(cnes)
 		ctx.fillText(  
-			Math.floor(n.cnes)
-			,cpos[0] - 7*camr
+			cnes
+			,cpos[0] - (cnesw.width/2)
 			,cpos[1] + 4*camr
 		);
 		ctx.restore();
 		
-		// draw constraints
-		//if(n.cto.length > 0){
-		//	ctx.beginPath();
-		//	for(var j = 0; j < n.cto.length; j++){		
-		//		ctx.moveTo(n.cpos[0], n.cpos[1]);
-		//		//ctx.lineTo(n.cto[j].cpos[0], n.cto[j].cpos[1]);
-		//		ctx.quadraticCurveTo(
-		//			 ((n.cpos[0] + n.cto[j].cpos[0]) / 2) + 30
-		//			,((n.cpos[1] + n.cto[j].cpos[1]) / 2) + 30
-		//			,n.cto[j].cpos[0]
-		//			,n.cto[j].cpos[1]
-		//			);
-		//	}
-		//	ctx.stroke();
-		//}
-		
-		// draw tracker-system bounding sphere
-		//if(n.ist === true){
-		//	ctx.strokeStyle = "#FFFFFF";
-		//	ctx.beginPath();
-		//	ctx.arc(n.cpos[0], n.cpos[1], n.bsRad(), 0, Math.PI*2, false);
-		//	ctx.stroke();
-		//}
-		
-		if(debug === true){
-			// draw transmit to node lines
-			ctx.strokeStyle = "#339900";
-			ctx.beginPath();
-			for(var k = 0; k < n.tto.length; k++){
-				var t = n.tto[k];
-				var tpos = convertWorldPointToCanvas(t.cpos);
-				//if(t.ist == false) { continue; }
-				ctx.moveTo(cpos[0], cpos[1]);
-				ctx.lineTo(tpos[0], tpos[1]);
-			}
-			ctx.stroke();
-		}
-		
-		// draw points of ray intersection	
-		//for(var j = 0; j < n.ttoPoints.length; j++){
-		//	if(n.ist === true) { ctx.fillStyle = "#3399FF"; }
-		//	else { ctx.fillStyle = "#CC00CC"; }
-		//	var p = n.ttoPoints[j];
-		//	ctx.beginPath();
-		//	ctx.arc(p[0], p[1], 2, 0, Math.PI*2, false);
-		//	ctx.fill();
-		//}
-	}
-	
-	if(debug === true){
-		// draw grid where nodes reside
-		for(var c = 0; c < grid.length; c++){
-			var col = grid[c];
-			for(var r = 0; r < col.length; r++){
-				var cell = col[r];
-			
-				for(var h = 0; h < cell.length; h++){
-					var gpos = convertWorldPointToCanvas( vec3.a(c*div, r*div, 0) );
-					ctx.strokeStyle = "#CCCCCC";
-					ctx.strokeRect( gpos[0], gpos[1], div, div);
-				}
-			
-			}
-		}
-		
-		// draw world aabb
-		var tl = convertWorldPointToCanvas(wbb.min);
-		var wh = vec3.scale(wdim, camr);
-		var br = convertWorldPointToCanvas(wbb.max);
-		ctx.save();
-		ctx.lineWidth = 1;
-		ctx.strokeStyle = "#CCCCCC";
-		ctx.strokeRect( tl[0], tl[1], wh[0], wh[1] )
-		ctx.beginPath();
-		ctx.arc(br[0], br[1], 10, 0, Math.PI*2, false);
-		ctx.fill();
-		ctx.beginPath();
-		ctx.arc(tl[0], tl[1], 10, 0, Math.PI*2, false);
-		ctx.fill();
-		ctx.restore();
 	}
 	
 	// draw packets!
@@ -341,17 +322,23 @@ function draw(){
 	}	
 	ctx.lineWidth = 1;
 	
-	ctx.fillStyle = "#FFFFFF";
-	ctx.fillText( MM(60)[0], 100, 20 );
+	if(showbst === true){
+		ctx.save();
+		ctx.font = "bold 32px Helvetica, Arial, sans-serif";
+		var btext = "BOOSTERS Remaining: " + pool;
+		var btextsize = ctx.measureText(btext).width;
+		ctx.fillText( btext, (dim[0] - btextsize - 10), (dim[1] - 10));
+		ctx.restore();
+	}
 	
-	ctx.fillText( "Reinforcements Remaining: " + pool, (dim[0] - 200), (dim[1] - 10));
-	
-	// draw the origin so we know where the f*** we are
-	var origin = convertWorldPointToCanvas(vec3.a(0,0,0));
-	ctx.beginPath();
-	ctx.arc( origin[0], origin[1], 10, 0, Math.PI*2, false );
-	ctx.fill();
-	//console.log(MM(60)[0]);
+	if(showwin === true){
+		ctx.save();
+		ctx.font = "bold 52px 'Trebuchet MS', Helvetica, Arial, sans-serif";
+		ctx.fillText( 'WIN', 10, 70);
+		ctx.font = "bold 28px 'Georgia', Helvetica, Arial, sans-serif";
+		ctx.fillText( "You purified the infection! Onto the next in 5 seconds...", 10, 100);
+		ctx.restore();
+	}
 }
 
 function resolveConstraints(){
@@ -394,10 +381,6 @@ function resolveNodeCollisions(){
 			if(dotCol >= radius2){
 				continue;
 			}
-		
-			//if(n1 == grabbed || n2 == grabbed){
-			//	console.log(grabbed);
-			//}
 			
 			var invMass = n1.invMass + n2.invMass;
 			var distance = Math.sqrt(dotCol);
@@ -434,14 +417,6 @@ function resolveNodeCollisions(){
 }
 
 function checkBounds(node){
-	//node.cpos[0] = Math.max( 0 + node.rad, Math.min(node.cpos[0], dim[0] - node.rad) );
-	//node.cpos[1] = Math.max( 0 + node.rad, Math.min(node.cpos[1], dim[1] - node.rad) );
-	//node.cpos[2] = Math.max( 0 + node.rad, Math.min(node.cpos[2], dim[2] - node.rad) );
-	//
-	//node.ppos[0] = Math.max( 0 + node.rad, Math.min(node.ppos[0], dim[0] - node.rad) );
-	//node.ppos[1] = Math.max( 0 + node.rad, Math.min(node.ppos[1], dim[1] - node.rad) );
-	//node.ppos[2] = Math.max( 0 + node.rad, Math.min(node.ppos[2], dim[2] - node.rad) );
-	
 	node.cpos[2] = 0; // uncomment this to disable 3D
 	node.ppos[2] = 0; // uncomment this to disable 3D
 }
@@ -450,10 +425,11 @@ function goNodeVerlet(dt){
 	for(var i = 0; i < nlist.length; i++){
 		var n1 = nlist[i];
 		n1.emitPackets();
-		if(n1.ist) { continue; } // trackers are fixed...
+		//if(n1.ist) { continue; } // trackers are fixed...
 	
 		// add gravity temporarily
 		//n1.acl = vec3.add(n1.acl, vec3.a(0, 0, -100));
+		n1.acl = vec3.add(n1.acl, vec3.scale(vec3.sub(n1.cpos, vec3.a(0,0,0)), -0.1));
 	
 		// save this for after integration
 		var temp = vec3.clone(n1.cpos);
@@ -666,7 +642,7 @@ function resolveNodePacketCollisions(){
 		t.cnes = t.cnes <= 0 ? 0 : t.cnes;
 		//t.cnes = t.cnes >= 100 ? 100 : t.cnes;
 		
-		//t.acl = vec3.add(t.acl, vec3.sub(p.cpos, p.ppos));
+		t.acl = vec3.add(t.acl, vec3.scale(vec3.sub(p.cpos, p.ppos), 10));
 	}
 
 	plist = marks;
@@ -674,8 +650,14 @@ function resolveNodePacketCollisions(){
 
 function reinforceCleanness(){
 	if(grabbed !== false && pool >= 1){
-		grabbed.cnes += 100;
+		grabbed.cnes += 75;
 		pool -= 1;
+		bused += 1;
+		$boosts.text("BOOSTS: " + pool);
+	}
+	if(pool <= 0){
+		// show "push r to restart the level"
+		$msg.text("Boosts depleted. Press 'r' to restart this level, unless... you're awesome?");
 	}
 }
 
@@ -699,13 +681,14 @@ function computeCameraRatio(){
 	for(var i = 0; i < nlist.length; i++){
 		var n = nlist[i];
 		// min xy
-		if(n.cpos[0] - (n.rad*2) < min[0]) min[0] = n.cpos[0] - (n.rad*2);
-		if(n.cpos[1] - (n.rad*2) < min[1]) min[1] = n.cpos[1] - (n.rad*2);
+		if(n.cpos[0] - (n.rad*4) < min[0]) min[0] = n.cpos[0] - (n.rad*4);
+		if(n.cpos[1] - (n.rad*4) < min[1]) min[1] = n.cpos[1] - (n.rad*4);
 		
 		// max xy
-		if(n.cpos[0] + n.rad*2 > max[0]) max[0] = n.cpos[0] + (n.rad*2);
-		if(n.cpos[1] + n.rad*2 > max[1]) max[1] = n.cpos[1] + (n.rad*2);
+		if(n.cpos[0] + (n.rad*4) > max[0]) max[0] = n.cpos[0] + (n.rad*4);
+		if(n.cpos[1] + (n.rad*4) > max[1]) max[1] = n.cpos[1] + (n.rad*4);
 	}
+	
 	// set world bounding box
 	wbb.min = min;
 	wbb.max = max;
@@ -739,117 +722,108 @@ function checkForWin(){
 			green = false;
 		}
 	}
-	if(green === true){
+	if(green === true && waiting === false){
+		waiting = true;
 		// do something about winning!
-		console.log("WIN!");
+		$winstatus.fadeIn();
+		completed[curlvl] = { time: +new Date() - start, boostsused: bused };
+		setTimeout(function(){
+			$winstatus.fadeOut(function(){
+				waiting = false;
+				curlvl++;
+				resetCurrentLevel();
+			});
+		}, 5000);
 	}
 }
 
-/////////////////////////////////////
-// Init
-/////////////////////////////////////
-
-
-var 
-	 cvs = document.getElementById("stage")
-	,$cvs = $(cvs)
-	,$w = $(window)
-	,dim = [ $w.width(), $w.height(), 1000 ] // dimensions: width, height of canvas
-	//,dimh = vec3.scale(dim, 0.5) // half dimensions of canvas
-	//,cam = { cpos: vec3.a(0,0,0), ppos: vec3.a(0,0,0) } // the "camera"!
-	,wbb = { min: [0,0,0], max: [0,0,0] } // effectively a bounding box for the world
-	,wdim = vec3.a(1,1,1) // the size of the world,
-	,woff = vec3.a(0,0,0) // the world offset, or the min value of wbb
-	,camr = 1 // "camera" ratio
-	,ctx = cvs.getContext('2d')
-	,r = Math.random()
-	,max = (10 * r) + 5 // max num of nodes per game, minimum of 5
-	,rwm = 0 // max radius per row, for init
-	,nlist = [] // node list
-	,tlist = [] // tracker list
-	,plist = [] // packet list
-	,grabbed = false // the currently clicked node
-	,grid = [] // grid[col][row]
-	,div = 50 // number of columns/rows in grid
-	,pool = 100 // amount of clean packets in the player's pool
-	,cwin = 75 // % * 100 that all nodes must be to win the round
-	,dbcl = +new Date() // last time a click was detected, for double click
-	,debug = false;
-
-// set width and height of canvas to match window
-resizeViewport();
-
-// create a few trackers
-var tMax = Math.floor(max / 4);
-for(var i = 0; i < tMax; i++){
-	var t = new Node(true);
-	// TODO: make the placement more evenly distributed
-	var sec = vec3.a(
-		 Math.floor(dim[0] / (tMax + 1))
-		,Math.floor((dim[1] / (tMax + 1)) * Math.random())
-		,0);
-	t.cpos = vec3.scale(sec, i+1);
-	t.ppos = vec3.scale(sec, i+1);
-	nlist.push(t);
-	tlist.push(t);
-}
-
-// create a few nodes around the trackers, connect them to the trackers
-var per = Math.floor(max / tMax); // divisions for placing nodes around trackers
-for (var i = 0; i < tlist.length; i++) {
-	var t = tlist[i];
-	var pInt = (Math.PI * 2) / per;
-	for(var j = 0; j < per; j++){
-		var n = new Node(false);
-		var dir = vec3.a(
-			 Math.cos(pInt*j)
-			,Math.sin(pInt*j)
-			,t.cpos[2]
-		);
-		n.cpos = vec3.add(t.cpos, vec3.scale(dir, (t.rad + n.rad) * 1.5));
-		n.ppos = vec3.clone(n.cpos);
-		nlist.push(n);
-		t.cto.push(n);
-		n.cto.push(t);
-	}
-
-	// connect the trackers in series
-	if(i !== 0){
-		t.cto.push( tlist[i-1] );
+function resetCurrentLevel(){
+	nlist = []; tlist = []; plist = []; bused = 0;
+	if(curlvl >= levels.length){
+		// say something awesome, and continue to random levels
+		console.log("ENDGAME");
+		generateRandomLevel();
+	} else {
+		var l = levels[curlvl];
+		pool = l.boosts;
+		$boosts.text("BOOSTS: " + pool);
+		$msg.text("");
+		$lvlstatus.find("h1").text(l.name);
+		$lvlstatus.find("p").text(l.hint);
+		$lvlstatus.fadeIn(400);
+		console.log("lvl fade in");
+		setTimeout(function(){
+			$lvlstatus.fadeOut(400);
+			console.log("lvl fade out");
+		}, 5000);
+		l.init();
+		start = +new Date();
 	}
 }
 
-// run this so that bounding spheres are accurate
-//resolveConstraints();
-//resolveConstraints();
-//goNodeVerlet(1);
-//
-// update placement of trackers based on their nodes so all are onscreen
-//for (var i = 0; i < tlist.length; i++) {
-//	var t = tlist[i];
-//	var r = t.bsRad();
-//	t.cpos[0] = Math.max( 0 + r, Math.min(t.cpos[0], dim[0] - r) );
-//	t.cpos[1] = Math.max( 0 + r, Math.min(t.cpos[1], dim[1] - r) );
-//	//t.cpos[2] = Math.max( 0 + r, Math.min(t.cpos[2], dim[2] - r) );
-//
-//	t.ppos[0] = Math.max( 0 + r, Math.min(t.ppos[0], dim[0] - r) );
-//	t.ppos[1] = Math.max( 0 + r, Math.min(t.ppos[1], dim[1] - r) );
-//	//t.ppos[2] = Math.max( 0 + r, Math.min(t.ppos[2], dim[2] - r) );
-//}
-//
-$cvs.bind("mousedown", function(e){
+function generateRandomLevel(){
+	nlist = []; tlist = []; plist = []; bused = 0;
+	pool = 5; // 5 boosts
+	$msg.text("");
+	$boosts.text("BOOSTS: " + pool);
+	start = +new Date();
+	
+	// create a few trackers
+	var tMax = Math.floor(max / 4);
+	for(var i = 0; i < tMax; i++){
+		var t = new Node(true);
+		var sec = vec3.a(
+			 Math.floor(dim[0] / (tMax + 1))
+			,Math.floor((dim[1] / (tMax + 1)) * Math.random())
+			,0);
+		t.cpos = vec3.scale(sec, i+1);
+		t.ppos = vec3.scale(sec, i+1);
+		nlist.push(t);
+		tlist.push(t);
+	}
+
+	// create a few nodes around the trackers, connect them to the trackers
+	var per = Math.floor(max / tMax); // divisions for placing nodes around trackers
+	for (var i = 0; i < tlist.length; i++) {
+		var t = tlist[i];
+		var pInt = (Math.PI * 2) / per;
+		for(var j = 0; j < per; j++){
+			var n = new Node(false);
+			var dir = vec3.a(
+				 Math.cos(pInt*j)
+				,Math.sin(pInt*j)
+				,t.cpos[2]
+			);
+			n.cpos = vec3.add(t.cpos, vec3.scale(dir, (t.rad + n.rad) * 1.5));
+			n.ppos = vec3.clone(n.cpos);
+			nlist.push(n);
+			t.cto.push(n);
+			n.cto.push(t);
+		}
+
+		// connect the trackers in series
+		if(i !== 0){
+			t.cto.push( tlist[i-1] );
+		}
+	}
+}
+
+function inGameMouseDown(e){
 	var now = +new Date();
 	var d = 9e200;
 	var mouse = convertCanvasPointToWorld( vec3.a(e.pageX, e.pageY, 0) );
 	console.log(e, mouse);
+	
 	for(var i = 0; i < nlist.length; i++){
-		var delta = vec3.length(vec3.sub(mouse, nlist[i].cpos));
-		if(delta < d) {
+		var n = nlist[i];
+		var delta = vec3.length(vec3.sub(mouse, n.cpos));
+		if(delta < d && delta <= n.rad*1.5 ) { // mouse within 1.5 radius
 			grabbed = nlist[i];
 			d = delta;
 		}
 	}
-	console.log(grabbed, convertWorldPointToCanvas(grabbed.cpos), camr);
+	console.log(grabbed);
+	//console.log(grabbed, convertWorldPointToCanvas(grabbed.cpos), camr);
 	
 	// test for double click
 	if(dbcl && now - dbcl > 120 && now - dbcl < 300){
@@ -857,28 +831,136 @@ $cvs.bind("mousedown", function(e){
 		console.log("DOUBLE CLICK: CLEANESS REINFORCED!");
 	}
 	
+	// set last double click time
 	dbcl = now;
-	console.log(dbcl);
-});
+	//console.log(dbcl);
+}
 
-$cvs.bind("mouseup", function(e){
-	grabbed = false;
-});
-
-$cvs.bind("mousemove", function(e){
-	if(grabbed !== false && !e.shiftKey){
-		var mouse = convertCanvasPointToWorld( vec3.a(e.pageX, e.pageY, 0) );
+function inGameMouseMove(e){
+	var mouse = convertCanvasPointToWorld( vec3.a(e.pageX, e.pageY, 0) );
+	if(grabbed !== false){
 		grabbed.cpos = mouse;
-                               
-		// kill movement       
-		grabbed.ppos = mouse;
+		grabbed.ppos = mouse; // kill movement
+		console.log("MOVING", mouse);
 	}
-});
+}
 
-var run = setInterval(function(){
-	// temporary, for debug purposes
-	ctx.fillStyle = "#000000";
-	ctx.fillRect(0, 0, dim[0], dim[1]);
+function inGameMouseUp(e){
+	grabbed = false;
+	if(showsta === true){
+		triggerFirstLevel()
+	}
+}
+
+function inGameKeyDown(e){
+	if(e.keyCode == 27) { // ESC
+		clearInterval(run); 
+		console.log("execution stopped", completed); 
+	} 
+	if(e.keyCode == 68){ // D
+		debug = true;
+	}
+	if(e.keyCode == 32){ // SPACE
+		showtto = true;
+	}
+}
+
+function inGameKeyUp(e){
+	console.log(e.keyCode);
+	if(showsta === true && e.keyCode === 32){
+		triggerFirstLevel()
+	} else if (showsta === false) {
+		if(e.keyCode == 68){
+			debug = false;
+		}
+		if(e.keyCode == 32){ // SPACE
+			showtto = false;
+		}
+		if(e.keyCode == 82){
+			resetCurrentLevel();
+		}
+	}
+}
+
+function triggerFirstLevel(){
+	showsta = false;
+	$start.fadeOut(function(){
+		curlvl = 0;
+		resetCurrentLevel();
+	});
+	
+}
+
+/////////////////////////////////////
+// Init
+/////////////////////////////////////
+
+var 
+	 cvs = document.getElementById("stage")
+	,$cvs = $(cvs)
+	,$start = $("#start") // start screen
+	,$lvlstatus = $("#lvlstatus") // start of round screen
+	,$winstatus = $("#winstatus") // win level screen
+	,$boosts = $("#boosts") // how many left
+	,$msg = $("#msg") // messages to the user
+	,$w = $(window)
+	,run = 0 // ref for setInterval
+	,waiting = false // used for animations
+	,dim = [ $w.width(), $w.height(), 1000 ] // dimensions: width, height of canvas
+	,wbb = { min: [0,0,0], max: [0,0,0] } // effectively a bounding box for the world
+	,wdim = vec3.a(1,1,1) // the size of the world,
+	,woff = vec3.a(0,0,0) // the world offset, or the min value of wbb
+	,camr = 1 // "camera" ratio
+	,ctx = cvs.getContext('2d')
+	,r = Math.random()
+	,max = (10 * r) + 5 // max num of nodes per random game, minimum of 5
+	,rwm = 0 // max radius per row, for init
+	,nlist = [] // node list
+	,tlist = [] // tracker list
+	,plist = [] // packet list
+	,grabbed = false // the currently clicked node
+	,pool = 5 // amount of boosts in the players pool
+	,bused = 0 // number of boosts used to beat a round
+	,start = +new Date() // time the round started
+	,cwin = 75 // % * 100 that all nodes must be to win the round
+	,dbcl = +new Date() // last time a click was detected, for double click
+	,ipos = [0,0,0] // initial position of a node when it was clicked
+	,debug = false
+	,showsta = true // show start screen
+	,showtto = false // show transmitting to
+	,showbst = false // show booster count
+	//,showrst = false // show restart note
+	//,showlvlt = false // show start level text
+	,showwin = false // show win state
+	,curlvl = 0 // current round
+	,levels = [
+		{ 	name: "Wait for it..."
+			,hint: "One may be larger, but timing is more important."
+			,boosts: 1
+			,init: function(){
+				var n1 = new Node(false), n2 = new Node(false);
+				n1.setRad(50);
+				n1.setPos(vec3.a(0,0,0));
+				n1.res = 0.01; n1.cnes = 0; n1.pstr = 2;
+				n1.eji = 100; n1.nej = 75;
+				
+				n2.setRad(15);
+				n2.setPos(vec3.a(-200, 90, 0));
+				n2.res = 0.9; n2.cnes = 10; n2.pstr = 90;
+				n2.nej = 0; 
+				
+				nlist = [n1, n2];
+			}
+		}
+	]
+	,completed = []; // levels the player has completed
+
+
+// set width and height of canvas to match window
+resizeViewport();
+generateRandomLevel();
+
+run = setInterval(function(){
 
 	goNodeVerlet(0.03);
 	goPacketVerlet(0.03);
@@ -888,27 +970,16 @@ var run = setInterval(function(){
 	resolveNodePacketCollisions();
 	updateNodePeers();
 	computeCameraRatio();
-	checkForWin();
+	if( showsta === false) { checkForWin(); }
 	draw();
 
 }, 33);
 
-$(document).bind("keydown", function(e){ 
-	if(e.keyCode == 27) { 
-		clearInterval(run); 
-		console.log("execution stopped", wbb); 
-	} 
-	if(e.keyCode == 68){
-		debug = true;
-	}
-}, false);
-
-$(document).bind("keyup", function(e){ 
-	if(e.keyCode == 68){
-		debug = false;
-	}
-}, false);
-
+$(document).bind("mousedown", inGameMouseDown);
+$(document).bind("mouseup", inGameMouseUp);
+$(document).bind("mousemove", inGameMouseMove);
+$(document).bind("keydown", inGameKeyDown);
+$(document).bind("keyup", inGameKeyUp);
 $(window).bind('resize', resizeViewport);
 	
 }); // end of document.ready
