@@ -1,5 +1,9 @@
 (function(){
 $(function(){
+
+// TODO: remove all console.logs
+// TODO: add end screen
+// TODO: allow state of nodes to be saved
 	
 var vec3 = {
 	ignited: false
@@ -643,6 +647,8 @@ function resolveNodePacketCollisions(){
 		//t.cnes = t.cnes >= 100 ? 100 : t.cnes;
 		
 		t.acl = vec3.add(t.acl, vec3.scale(vec3.sub(p.cpos, p.ppos), 10));
+		
+		pcount += 1; // keep a count!
 	}
 
 	plist = marks;
@@ -726,7 +732,11 @@ function checkForWin(){
 		waiting = true;
 		// do something about winning!
 		$winstatus.fadeIn();
-		completed[curlvl] = { time: +new Date() - start, boostsused: bused };
+		completed[curlvl] = { 
+			time: +new Date() - start
+			,boostsused: bused
+			,cellcount: nlist.length + tlist.length
+			,totalantibodies: pcount };
 		setTimeout(function(){
 			$winstatus.fadeOut(function(){
 				waiting = false;
@@ -738,7 +748,7 @@ function checkForWin(){
 }
 
 function resetCurrentLevel(){
-	nlist = []; tlist = []; plist = []; bused = 0;
+	nlist = []; tlist = []; plist = []; bused = 0; pcount = 0;
 	if(curlvl >= levels.length){
 		// say something awesome, and continue to random levels
 		console.log("ENDGAME");
@@ -762,7 +772,7 @@ function resetCurrentLevel(){
 }
 
 function generateRandomLevel(){
-	nlist = []; tlist = []; plist = []; bused = 0;
+	nlist = []; tlist = []; plist = []; bused = 0; pcount = 0;
 	pool = 5; // 5 boosts
 	$msg.text("");
 	$boosts.text("BOOSTS: " + pool);
@@ -913,7 +923,7 @@ var
 	,camr = 1 // "camera" ratio
 	,ctx = cvs.getContext('2d')
 	,r = Math.random()
-	,max = (10 * r) + 5 // max num of nodes per random game, minimum of 5
+	,max = (20 * r) + 5 // max num of nodes per random game, minimum of 5
 	,rwm = 0 // max radius per row, for init
 	,nlist = [] // node list
 	,tlist = [] // tracker list
@@ -922,6 +932,7 @@ var
 	,pool = 5 // amount of boosts in the players pool
 	,bused = 0 // number of boosts used to beat a round
 	,start = +new Date() // time the round started
+	,pcount = 0 // number of packets used in a round
 	,cwin = 75 // % * 100 that all nodes must be to win the round
 	,dbcl = +new Date() // last time a click was detected, for double click
 	,ipos = [0,0,0] // initial position of a node when it was clicked
