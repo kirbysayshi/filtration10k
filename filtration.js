@@ -732,14 +732,18 @@ function checkForWin(){
 		waiting = true;
 		// do something about winning!
 		$winstatus.fadeIn();
+		$cvs.fadeTo(300, 0.2);
+		$msg.text("");
 		completed[curlvl] = { 
 			time: +new Date() - start
 			,boostsused: bused
 			,cellcount: nlist.length + tlist.length
-			,totalantibodies: pcount };
+			,totalantibodies: pcount
+			,resets: resets };
 		setTimeout(function(){
 			$winstatus.fadeOut(function(){
 				waiting = false;
+				$cvs.fadeTo(300, 1);
 				curlvl++;
 				resetCurrentLevel();
 			});
@@ -757,7 +761,7 @@ function resetCurrentLevel(){
 		var l = levels[curlvl];
 		pool = l.boosts;
 		$boosts.text("BOOSTS: " + pool);
-		$msg.text("");
+		$msg.text("Press the ESC key to stop at any time.");
 		$lvlstatus.find("h1").text(l.name);
 		$lvlstatus.find("p").text(l.hint);
 		$lvlstatus.fadeIn(400);
@@ -866,6 +870,15 @@ function inGameKeyDown(e){
 	if(e.keyCode == 27) { // ESC
 		clearInterval(run); 
 		console.log("execution stopped", completed); 
+		$start.hide();
+		$winstatus.hide();
+		$lvlstatus.hide();
+		$boosts.hide();
+		$msg.hide();
+		
+		tallyFinalScore();
+		$cvs.fadeTo(300, 0.2);
+		$endgame.fadeIn();
 	} 
 	if(e.keyCode == 68){ // D
 		debug = true;
@@ -887,6 +900,7 @@ function inGameKeyUp(e){
 			showtto = false;
 		}
 		if(e.keyCode == 82){
+			resets += 1;
 			resetCurrentLevel();
 		}
 	}
@@ -898,7 +912,24 @@ function triggerFirstLevel(){
 		curlvl = 0;
 		resetCurrentLevel();
 	});
-	
+}
+
+function tallyFinalScore(){
+	var boosts = 0, cellcount = 0, time = 0, totalantibodies = 0, rsts = 0;
+	for(var i = 0; i < completed.length; i++){
+		boosts 			+= completed[i].boostsused;
+		cellcount 		+= completed[i].cellcount;
+		time 			+= completed[i].time;
+		totalantibodies += completed[i].totalantibodies;
+		rsts 			+= completed[i].resets;
+	}
+	$endgame.find("ul").html(
+		"<li>" + completed.length + " rounds completed in " + (time / 1000) + " seconds</li>"
+		+ "<li>" + cellcount + " cells saved from a horrible, painful death</li>"
+		+ "<li>You used " + boosts + " boosts of antibiotics</li>"
+		+ "<li>You fought with an army of " + totalantibodies + " antibodies</li>"
+		+ "<li>You had to retry " + rsts + (rsts == 1 ? " time" : " times" ) + "</li>"
+	);
 }
 
 /////////////////////////////////////
@@ -911,6 +942,7 @@ var
 	,$start = $("#start") // start screen
 	,$lvlstatus = $("#lvlstatus") // start of round screen
 	,$winstatus = $("#winstatus") // win level screen
+	,$endgame = $("#endgame") // last screen
 	,$boosts = $("#boosts") // how many left
 	,$msg = $("#msg") // messages to the user
 	,$w = $(window)
@@ -933,6 +965,7 @@ var
 	,bused = 0 // number of boosts used to beat a round
 	,start = +new Date() // time the round started
 	,pcount = 0 // number of packets used in a round
+	,resets = 0 // number of times r is used
 	,cwin = 75 // % * 100 that all nodes must be to win the round
 	,dbcl = +new Date() // last time a click was detected, for double click
 	,ipos = [0,0,0] // initial position of a node when it was clicked

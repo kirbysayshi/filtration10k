@@ -3,12 +3,13 @@
 	body { margin: 0; padding: 0; background-color: #000000; font-size: 13px; font-family: Helvetica, Arial, sans-serif; color: white;}
 	canvas { position: absolute; }
 	h1 { margin: 0; padding: 0; font-size: 100px; }
-	#start, #lvlstatus, #winstatus { width: 440px; position: relative; z-index: 1000; margin: 0px auto 0px auto; padding: 50px; }			
+	#start, #lvlstatus, #winstatus, #endgame { width: 440px; position: relative; z-index: 1000; margin: 0px auto 0px auto; padding: 50px; }			
 	#lvlstatus { display: none; width: 600px; }
 	#winstatus { display: none; width: 600px; }
 	#hud { position: absolute; bottom: 0px; height: 40px; width: 100%; overflow: hidden; }
-	#msg { float: left; width: 40%; font-size: 16px; padding: 0px 0px 25px 0px; }
+	#msg { float: left; width: 40%; font-size: 16px; padding: 0px 0px 0px 25px; }
 	#boosts { float: right; width: 40%; font-size: 32px; padding: 0px 25px 0px 0px; text-align: right; }
+	#endgame { display: none; }
 </style></head>
 <body>
 	<canvas id="stage"></canvas>
@@ -35,8 +36,13 @@
 		<p>SUBTITLE HERE</p>
 	</div>
 	<div id="winstatus">
-		<h1>WIN</h1>
+		<h1>Win</h1>
 		<p>You purified the infection! Onto the next in 5 seconds...</p>
+	</div>
+	<div id="endgame">
+		<h1>Tally... Ho?</h1>
+		<p>Thanks for playing! Final Score:</p>
+		<ul></ul>
 	</div>
 	<script src="jquery-1.4.2.min.js" type="text/javascript" charset="utf-8"></script>
 	<script src="modules/MM/MM.js" type="text/javascript" charset="utf-8"></script>
