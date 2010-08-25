@@ -1,23 +1,22 @@
 <!DOCTYPE html><html><head><title>Epidemic</title>
 <style type="text/css">
-	body { margin: 0; padding: 0; background-color: #000000; font-size: 13px; font-family: Helvetica, Arial, sans-serif; color: white;}
-	canvas { position: absolute; }
-	h1 { margin: 0; padding: 0; font-size: 100px; }
-	#start, #lvlstatus, #winstatus, #endgame { width: 440px; position: relative; z-index: 1000; margin: 0px auto 0px auto; padding: 50px; }			
-	#lvlstatus { display: none; width: 600px; }
-	#winstatus { display: none; width: 600px; }
-	#hud { position: absolute; bottom: 0px; height: 40px; width: 100%; overflow: hidden; }
-	#msg { float: left; width: 40%; font-size: 16px; padding: 0px 0px 0px 25px; }
-	#boosts { float: right; width: 40%; font-size: 32px; padding: 0px 25px 0px 0px; text-align: right; }
-	#endgame { display: none; }
+body{margin:0;padding:0;background-color:#000000;font:13px Helvetica,sans-serif;color:white;}
+canvas{position:absolute;}
+h1{margin:0;padding:0;font-size:100px;}
+#st,#ls,#ws,#eg{width:440px;position:relative;z-index:1000;margin:0px auto 0px auto;padding:50px;}
+#ls,#ws{display:none;width:600px;}
+#hud{position:absolute;bottom:0px;height:40px;width:100%;overflow:hidden;}
+#msg{float:left;width:40%;font-size:16px;padding-left:25px;}
+#bst{float:right;width:40%;font-size:32px;padding-right:25px;text-align:right;}
+#eg{display: none;}
 </style></head>
 <body>
-	<canvas id="stage"></canvas>
-	<div id="hud"><div id="msg"></div><div id="boosts"></div></div>
-	<div id="start">
+	<canvas id="sta"></canvas>
+	<div id="hud"><div id="msg"></div><div id="bst"></div></div>
+	<div id="st">
 		<h1>Epidemic</h1>
 		<p>press spacebar or click to start</p>
-		<div id="instr">
+		<div>
 			<p>Cells: green is clean, red is infected. Over 75 means the cell will deploy antibodies. Under 75 will cause the cell to spread the virus.</p>
 			<p>Double click to boost a cell by 75.</p>
 			<p>Click and drag to move cells around: position matters!</p>
@@ -31,21 +30,20 @@
 			<p>Hold spacebar to see who cells will transmit to.</p>
 		</div>
 	</div>	
-	<div id="lvlstatus">
-		<h1>TITLE TXT HERE</h1>
-		<p>SUBTITLE HERE</p>
+	<div id="ls">
+		<h1></h1>
+		<p></p>
 	</div>
-	<div id="winstatus">
+	<div id="ws">
 		<h1>Win</h1>
-		<p>You purified the infection! Onto the next in 5 seconds...</p>
+		<p>You destroyed the infection! Next round in 5 seconds...</p>
 	</div>
-	<div id="endgame">
+	<div id="eg">
 		<h1>Tally... Ho?</h1>
 		<p>Thanks for playing! Final Score:</p>
 		<ul></ul>
 	</div>
-	<script src="jquery-1.4.2.min.js" type="text/javascript" charset="utf-8"></script>
-	<script src="modules/MM/MM.js" type="text/javascript" charset="utf-8"></script>
-	<script src="filtration.js" type="text/javascript" charset="utf-8"></script>		
+	<script type="text/javascript" src="http://ajax.microsoft.com/ajax/jquery/jquery-1.4.2.min.js"></script>
+	<script src="filtration.js" type="text/javascript"></script>		
 </body>
 </html>
